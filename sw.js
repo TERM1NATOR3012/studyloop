@@ -1,8 +1,9 @@
-const CACHE = "studyloop-cache-v1";
+const CACHE = "studyloop-cache-v2"; // <-- changed v1 -> v2
 const CORE = [
   "./",
   "./index.html",
   "./manifest.json",
+  "./sw.js",
   "./assets/css/app.css",
   "./assets/js/app.js",
   "./assets/js/db.js",
@@ -25,9 +26,7 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   const req = event.request;
-  const url = new URL(req.url);
 
-  // Network-first for HTML, cache-first for everything else
   if (req.mode === "navigate") {
     event.respondWith(
       fetch(req).then((res) => {
@@ -46,7 +45,7 @@ self.addEventListener("fetch", (event) => {
         const copy = res.clone();
         caches.open(CACHE).then(c => c.put(req, copy)).catch(()=>{});
         return res;
-      }).catch(() => cached);
+      });
     })
   );
 });
