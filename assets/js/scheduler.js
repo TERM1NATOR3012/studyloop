@@ -60,4 +60,5 @@ export function distributeDates(startISO, count, spreadDays) {
     out.push(addDays(startISO, offset));
   }
   return out;
+
 }
