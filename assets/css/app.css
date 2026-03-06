@@ -513,4 +513,32 @@ html[data-theme="Slate Ember"]{
   --danger: #FF3B30;
   --hover: rgba(251,119,60,.14);
   --input: rgba(46,46,46,.92);
+
+}
+/* Sonoma polish patch */
+:root{
+  --radius-lg: 16px;
+  --radius-md: 12px;
+  --radius-sm: 10px;
+  --shadow: 0 14px 40px rgba(0,0,0,.08);
+  --shadow2: 0 8px 22px rgba(0,0,0,.10);
+}
+
+body{
+  letter-spacing: -0.01em;
+  line-height: 1.35;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.pageTitle{
+  letter-spacing: -0.02em;
+}
+
+.btn{
+  font-weight: 800;
+}
+
+.itemTitle{
+  letter-spacing: -0.01em;
 }
