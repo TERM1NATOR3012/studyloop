@@ -542,3 +542,144 @@ body{
 .itemTitle{
   letter-spacing: -0.01em;
 }
+/* ===============================
+   Sonoma UI overlays (dropdown + datepicker) + in-app toast
+   =============================== */
+
+.overlayHost{
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: transparent;
+}
+.overlayHost.hidden{ display:none; }
+
+.dropdownMenu, .datePopover{
+  position: fixed;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: var(--shadow2);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  padding: 8px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.dropdownItem{
+  padding: 10px 12px;
+  border-radius: 14px;
+  cursor: pointer;
+  font-weight: 900;
+  color: var(--text);
+}
+.dropdownItem:hover{ background: var(--hover); }
+.dropdownItem.isSelected{
+  background: rgba(0,122,255,.16);
+  color: var(--primary);
+}
+
+.selectProxy{
+  width: 100%;
+  text-align: left;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--input);
+  padding: 10px 12px;
+  color: var(--text);
+  font-weight: 800;
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+}
+.selectProxy:hover{ background: var(--hover); }
+.selectProxy:focus{
+  outline: none;
+  border: 2px solid var(--primary);
+  padding: 9px 11px;
+}
+
+.dateHead{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 10px;
+  padding: 6px 6px 10px 6px;
+}
+.dateHeadTitle{
+  font-weight: 950;
+}
+.dateHeadBtns{
+  display:flex;
+  gap: 8px;
+}
+.dateMiniBtn{
+  border: 1px solid var(--border);
+  background: var(--card2);
+  border-radius: 12px;
+  padding: 8px 10px;
+  font-weight: 950;
+  cursor: pointer;
+}
+.dateMiniBtn:hover{ background: var(--hover); }
+
+.dateGrid{
+  display:grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+  padding: 6px;
+}
+.dateDow{
+  text-align:center;
+  color: var(--muted);
+  font-weight: 950;
+  font-size: 12px;
+}
+.dateDay{
+  text-align:center;
+  padding: 10px 0;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--card2);
+  cursor: pointer;
+  font-weight: 950;
+}
+.dateDay:hover{ background: var(--hover); }
+.dateDay.isMuted{
+  opacity: .35;
+  cursor: default;
+}
+.dateDay.isToday{
+  border: 2px solid var(--primary);
+}
+.dateDay.isSelected{
+  background: var(--primary);
+  color: #fff;
+  border-color: rgba(255,255,255,.25);
+}
+
+.toastHost{
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  z-index: 3000;
+  display:flex;
+  flex-direction:column;
+  gap: 10px;
+  pointer-events: none;
+}
+.toast{
+  pointer-events: auto;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 10px 14px;
+  box-shadow: var(--shadow2);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  font-weight: 900;
+}
+.toast.success{ border-color: rgba(52,199,89,.45); }
+.toast.error{ border-color: rgba(255,59,48,.45); }
