@@ -1,4 +1,4 @@
-const CACHE = "studyloop-cache-v2"; // <-- changed v1 -> v2
+const CACHE = "studyloop-cache-v3"; // <-- changed v1 -> v2
 const CORE = [
   "./",
   "./index.html",
@@ -49,3 +49,4 @@ self.addEventListener("fetch", (event) => {
     })
   );
 });
+
