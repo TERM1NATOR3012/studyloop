@@ -8,6 +8,14 @@ function promisifyRequest(req) {
   });
 }
 
+function txDone(t) {
+  return new Promise((resolve, reject) => {
+    t.oncomplete = () => resolve();
+    t.onerror = () => reject(t.error || new Error("Transaction error"));
+    t.onabort = () => reject(t.error || new Error("Transaction aborted"));
+  });
+}
+
 function openDB() {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
@@ -57,7 +65,9 @@ export class StudyLoopDB {
     return new StudyLoopDB(db);
   }
 
-  constructor(db) { this.db = db; }
+  constructor(db) {
+    this.db = db;
+  }
 
   async getSetting(key) {
     const { stores } = tx(this.db, ["settings"]);
@@ -68,13 +78,15 @@ export class StudyLoopDB {
   async setSetting(key, value) {
     const { t, stores } = tx(this.db, ["settings"], "readwrite");
     stores.settings.put({ key, value: String(value) });
-    return promisifyRequest(t.done ?? new Promise((res, rej) => { t.oncomplete=res; t.onerror=rej; }));
+    await txDone(t);
   }
 
   async ensureDefaults(defaults) {
     for (const [k, v] of Object.entries(defaults)) {
       const cur = await this.getSetting(k);
-      if (cur === null || cur === undefined || cur === "") await this.setSetting(k, v);
+      if (cur === null || cur === undefined || cur === "") {
+        await this.setSetting(k, v);
+      }
     }
   }
 
@@ -82,7 +94,7 @@ export class StudyLoopDB {
   async listSubjects() {
     const { stores } = tx(this.db, ["subjects"]);
     const all = await promisifyRequest(stores.subjects.getAll());
-    all.sort((a,b) => a.name.localeCompare(b.name));
+    all.sort((a, b) => a.name.localeCompare(b.name));
     return all;
   }
 
@@ -96,8 +108,13 @@ export class StudyLoopDB {
     return promisifyRequest(stores.subjects.put(subject));
   }
 
+  async getSubject(id) {
+    const { stores } = tx(this.db, ["subjects"]);
+    return promisifyRequest(stores.subjects.get(id));
+  }
+
   async deleteSubject(subjectId) {
-    // cascade delete: topics + revisions + homework
+    // cascade
     const topics = await this.listTopics({ subjectId });
     for (const tp of topics) await this.deleteTopic(tp.id);
 
@@ -108,22 +125,18 @@ export class StudyLoopDB {
     return promisifyRequest(stores.subjects.delete(subjectId));
   }
 
-  async getSubject(id) {
-    const { stores } = tx(this.db, ["subjects"]);
-    return promisifyRequest(stores.subjects.get(id));
-  }
-
   // Topics
-  async listTopics({ subjectId=null, search=null } = {}) {
+  async listTopics({ subjectId = null, search = null } = {}) {
     const { stores } = tx(this.db, ["topics"]);
     const all = await promisifyRequest(stores.topics.getAll());
+
     let out = all;
     if (subjectId !== null) out = out.filter(t => t.subjectId === subjectId);
     if (search) {
       const s = search.toLowerCase();
       out = out.filter(t => (t.name || "").toLowerCase().includes(s));
     }
-    out.sort((a,b) => (b.dateAdded || "").localeCompare(a.dateAdded || ""));
+    out.sort((a, b) => (b.dateAdded || "").localeCompare(a.dateAdded || ""));
     return out;
   }
 
@@ -143,30 +156,26 @@ export class StudyLoopDB {
   }
 
   async deleteTopic(topicId) {
-    // delete revisions for topic
     const revs = await this.listRevisionsByTopic(topicId);
-    const { stores } = tx(this.db, ["revisions", "topics"], "readwrite");
+    const { t, stores } = tx(this.db, ["revisions", "topics"], "readwrite");
+
     for (const r of revs) stores.revisions.delete(r.id);
     stores.topics.delete(topicId);
-    return promisifyRequest(stores.topics.transaction.done ?? new Promise((res, rej) => {
-      stores.topics.transaction.oncomplete=res; stores.topics.transaction.onerror=rej;
-    }));
+
+    await txDone(t);
   }
 
   // Revisions
   async addRevisions(revisions) {
-    const { stores } = tx(this.db, ["revisions"], "readwrite");
+    const { t, stores } = tx(this.db, ["revisions"], "readwrite");
     for (const r of revisions) stores.revisions.add(r);
-    return promisifyRequest(stores.revisions.transaction.done ?? new Promise((res, rej) => {
-      stores.revisions.transaction.oncomplete=res; stores.revisions.transaction.onerror=rej;
-    }));
+    await txDone(t);
   }
 
   async listRevisionsByDate(dateStr) {
     const { stores } = tx(this.db, ["revisions"]);
     const idx = stores.revisions.index("scheduledDate");
-    const all = await promisifyRequest(idx.getAll(dateStr));
-    return all;
+    return promisifyRequest(idx.getAll(dateStr));
   }
 
   async listPendingRevisionsByDate(dateStr) {
@@ -178,18 +187,18 @@ export class StudyLoopDB {
     const { stores } = tx(this.db, ["revisions"]);
     const idx = stores.revisions.index("topicId");
     const all = await promisifyRequest(idx.getAll(topicId));
-    all.sort((a,b) => a.revisionNum - b.revisionNum);
+    all.sort((a, b) => a.revisionNum - b.revisionNum);
     return all;
-  }
-
-  async updateRevision(rev) {
-    const { stores } = tx(this.db, ["revisions"], "readwrite");
-    return promisifyRequest(stores.revisions.put(rev));
   }
 
   async getRevision(id) {
     const { stores } = tx(this.db, ["revisions"]);
     return promisifyRequest(stores.revisions.get(id));
+  }
+
+  async updateRevision(rev) {
+    const { stores } = tx(this.db, ["revisions"], "readwrite");
+    return promisifyRequest(stores.revisions.put(rev));
   }
 
   async pendingRevisionsInRange(fromDate, toDate) {
@@ -208,13 +217,15 @@ export class StudyLoopDB {
   }
 
   // Homework
-  async listHomework({ subjectId=null, status=null } = {}) {
+  async listHomework({ subjectId = null, status = null } = {}) {
     const { stores } = tx(this.db, ["homework"]);
     const all = await promisifyRequest(stores.homework.getAll());
+
     let out = all;
     if (subjectId !== null) out = out.filter(h => h.subjectId === subjectId);
     if (status) out = out.filter(h => h.status === status);
-    out.sort((a,b) => (a.dueDate || "").localeCompare(b.dueDate || ""));
+
+    out.sort((a, b) => (a.dueDate || "").localeCompare(b.dueDate || ""));
     return out;
   }
 
@@ -248,7 +259,7 @@ export class StudyLoopDB {
   async listHolidays() {
     const { stores } = tx(this.db, ["holidays"]);
     const all = await promisifyRequest(stores.holidays.getAll());
-    all.sort((a,b) => (a.date||"").localeCompare(b.date||""));
+    all.sort((a, b) => (a.date || "").localeCompare(b.date || ""));
     return all;
   }
 
@@ -262,7 +273,7 @@ export class StudyLoopDB {
     return promisifyRequest(stores.holidays.delete(id));
   }
 
-  // Daily log / streak
+  // Daily log
   async logDay(dateStr, allCompleted) {
     const { stores } = tx(this.db, ["dailyLog"], "readwrite");
     return promisifyRequest(stores.dailyLog.put({ date: dateStr, allCompleted: allCompleted ? 1 : 0 }));
