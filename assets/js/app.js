@@ -14,7 +14,7 @@ function el(html) {
 }
 function escapeHtml(s){ return String(s).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;"); }
 
-/* ---------------- Sonoma in-app toast (NO browser alert) ---------------- */
+/* ---------------- In-app toast (no browser alert) ---------------- */
 let toastHost;
 function ensureToastHost(){
   if (toastHost) return toastHost;
@@ -65,7 +65,6 @@ function enhanceSelects(root){
     proxy.type = "button";
     proxy.className = "selectProxy";
 
-    // copy inline sizing if used (max-width etc.)
     const style = sel.getAttribute("style");
     if (style) proxy.setAttribute("style", style);
 
@@ -77,12 +76,9 @@ function enhanceSelects(root){
 
     sel.style.display = "none";
     sel.insertAdjacentElement("beforebegin", proxy);
-
     sel.addEventListener("change", syncText);
 
-    proxy.addEventListener("click", () => {
-      openSelectDropdown(sel, proxy);
-    });
+    proxy.addEventListener("click", () => openSelectDropdown(sel, proxy));
   });
 }
 
@@ -94,7 +90,6 @@ function openSelectDropdown(sel, anchorBtn){
   menu.className = "dropdownMenu";
   menu.style.width = Math.max(rect.width, 220) + "px";
 
-  const items = [];
   for (let i=0;i<sel.options.length;i++){
     const opt = sel.options[i];
     const div = document.createElement("div");
@@ -107,17 +102,15 @@ function openSelectDropdown(sel, anchorBtn){
       closeOverlay();
     });
 
-    items.push(div);
     menu.appendChild(div);
   }
 
-  // position below; if not enough space, go above
   const pad = 8;
   let top = rect.bottom + pad;
   let left = rect.left;
+
   openOverlay(menu);
 
-  // after added, we can compute height
   const mh = menu.getBoundingClientRect().height;
   const spaceBelow = window.innerHeight - rect.bottom;
   if (spaceBelow < mh + 16) {
@@ -129,7 +122,7 @@ function openSelectDropdown(sel, anchorBtn){
   menu.style.left = `${left}px`;
 }
 
-/* ---------------- Custom date picker (rounded, no native popup) ---------------- */
+/* ---------------- Custom date picker (rounded) ---------------- */
 function enhanceDateInputs(root){
   $$("input[data-date='1']", root).forEach(inp => {
     if (inp.dataset.enhanced === "1") return;
@@ -146,17 +139,37 @@ function openDatePicker(inputEl){
   let base = new Date(value + "T00:00:00");
   let year = base.getFullYear();
   let month = base.getMonth(); // 0..11
-  const selected = value;
+  let selected = inputEl.value || "";
 
   const pop = document.createElement("div");
   pop.className = "datePopover";
   pop.style.width = "340px";
 
+  const buildDays = (startDow, daysInMonth) => {
+    const today = isoToday();
+    const cells = [];
+    const totalCells = 42;
+    for (let i=0;i<totalCells;i++){
+      const day = i - startDow + 1;
+      if (day < 1 || day > daysInMonth){
+        cells.push(`<div class="dateDay isMuted"></div>`);
+      } else {
+        const iso = `${year}-${String(month+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+        const cls = [
+          "dateDay",
+          (iso === today) ? "isToday" : "",
+          (iso === selected) ? "isSelected" : "",
+        ].filter(Boolean).join(" ");
+        cells.push(`<div class="${cls}" data-day="${iso}">${day}</div>`);
+      }
+    }
+    return cells.join("");
+  };
+
   const render = () => {
     const first = new Date(year, month, 1);
     const startDow = (first.getDay() + 6) % 7; // Monday=0
     const daysInMonth = new Date(year, month + 1, 0).getDate();
-
     const title = first.toLocaleDateString(undefined, { month:"long", year:"numeric" });
 
     pop.innerHTML = `
@@ -177,23 +190,23 @@ function openDatePicker(inputEl){
     `;
 
     $("[data-prev]", pop).addEventListener("click", () => {
-      month -= 1;
-      if (month < 0){ month = 11; year -= 1; }
+      month -= 1; if (month < 0){ month = 11; year -= 1; }
       render();
     });
     $("[data-next]", pop).addEventListener("click", () => {
-      month += 1;
-      if (month > 11){ month = 0; year += 1; }
+      month += 1; if (month > 11){ month = 0; year += 1; }
       render();
     });
     $("[data-today]", pop).addEventListener("click", () => {
       inputEl.value = isoToday();
+      selected = inputEl.value;
       inputEl.dispatchEvent(new Event("input", { bubbles:true }));
       inputEl.dispatchEvent(new Event("change", { bubbles:true }));
       closeOverlay();
     });
     $("[data-clear]", pop).addEventListener("click", () => {
       inputEl.value = "";
+      selected = "";
       inputEl.dispatchEvent(new Event("input", { bubbles:true }));
       inputEl.dispatchEvent(new Event("change", { bubbles:true }));
       closeOverlay();
@@ -203,6 +216,7 @@ function openDatePicker(inputEl){
       btn.addEventListener("click", () => {
         const iso = btn.dataset.day;
         inputEl.value = iso;
+        selected = iso;
         inputEl.dispatchEvent(new Event("input", { bubbles:true }));
         inputEl.dispatchEvent(new Event("change", { bubbles:true }));
         closeOverlay();
@@ -210,31 +224,9 @@ function openDatePicker(inputEl){
     });
   };
 
-  const buildDays = (startDow, daysInMonth) => {
-    const today = isoToday();
-    const cells = [];
-    const totalCells = 42; // 6 weeks
-    for (let i=0;i<totalCells;i++){
-      const day = i - startDow + 1;
-      if (day < 1 || day > daysInMonth){
-        cells.push(`<div class="dateDay isMuted"></div>`);
-      } else {
-        const iso = `${year}-${String(month+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
-        const cls = [
-          "dateDay",
-          (iso === today) ? "isToday" : "",
-          (iso === selected) ? "isSelected" : "",
-        ].filter(Boolean).join(" ");
-        cells.push(`<div class="${cls}" data-day="${iso}">${day}</div>`);
-      }
-    }
-    return cells.join("");
-  };
-
   render();
   openOverlay(pop);
 
-  // position near input
   const rect = inputEl.getBoundingClientRect();
   const pad = 8;
   let top = rect.bottom + pad;
@@ -247,9 +239,9 @@ function openDatePicker(inputEl){
   left = Math.min(left, window.innerWidth - pop.getBoundingClientRect().width - 16);
   pop.style.top = `${top}px`;
   pop.style.left = `${left}px`;
-};
+}
 
-/* ---------------- Modal system (same as before) ---------------- */
+/* ---------------- Modal system ---------------- */
 function showModal({ title, body, onSubmit, submitText="Save" }) {
   const host = $("#modalHost");
   host.classList.remove("hidden");
@@ -273,8 +265,6 @@ function showModal({ title, body, onSubmit, submitText="Save" }) {
   `);
 
   host.appendChild(modal);
-
-  // Enhance custom controls inside modals too:
   enhanceSelects(modal);
   enhanceDateInputs(modal);
 
@@ -290,10 +280,8 @@ function showModal({ title, body, onSubmit, submitText="Save" }) {
   const form = $("[data-form]", host);
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
-    if (onSubmit) {
-      const ok = await onSubmit(new FormData(form));
-      if (ok !== false) close();
-    } else close();
+    const ok = await onSubmit?.(new FormData(form));
+    if (ok !== false) close();
   });
 }
 
@@ -333,7 +321,6 @@ function confirmModal({ title="Confirm", message="Are you sure?", confirmText="O
     $("[data-close]", host).addEventListener("click", () => { close(); resolve(false); });
     $("[data-cancel]", host).addEventListener("click", () => { close(); resolve(false); });
     $("[data-ok]", host).addEventListener("click", () => { close(); resolve(true); });
-
     host.addEventListener("click", (e) => { if (e.target === host) { close(); resolve(false); } }, { once:true });
   });
 }
@@ -380,7 +367,7 @@ function setPage(pageName) {
 }
 $$(".navItem").forEach(b => b.addEventListener("click", () => setPage(b.dataset.page)));
 
-/* ---------- Helpers: join topic + subject ---------- */
+/* ---------- Helpers ---------- */
 async function subjectsMap() {
   const subs = await db.listSubjects();
   const m = new Map();
@@ -388,7 +375,7 @@ async function subjectsMap() {
   return m;
 }
 
-/* ---------- Carry-forward (ask every time) ---------- */
+/* ---------- Carry-forward ---------- */
 async function checkCarryForward() {
   const last = await db.getSetting("last_opened");
   const today = isoToday();
@@ -408,13 +395,10 @@ async function checkCarryForward() {
     body: `
       <div class="card" style="box-shadow:none">
         <div style="font-weight:950">${missed.length} pending revision(s)</div>
-        <div class="itemMeta">From ${from} to ${yesterday}</div>
-        <hr class="sep">
-        <div class="row" style="flex-wrap:wrap">
+        <div class="row" style="flex-wrap:wrap; margin-top:10px">
           <label class="row" style="font-weight:900"><input type="radio" name="mode" value="all" checked> Load all today</label>
           <label class="row" style="font-weight:900"><input type="radio" name="mode" value="spread"> Spread over</label>
           <input class="input" style="max-width:120px" name="spreadDays" type="number" min="2" max="30" value="7">
-          <div class="itemMeta">days</div>
         </div>
       </div>
     `,
@@ -441,7 +425,7 @@ async function checkCarryForward() {
         }
       }
 
-      toast("Revisions rescheduled.");
+      toast("Updated.");
       await render("today");
     }
   });
@@ -456,6 +440,7 @@ async function render(pageName) {
     case "upcoming": return renderUpcoming();
     case "topics": return renderTopics();
     case "homework": return renderHomework();
+    case "exams": return renderExams();          // NEW
     case "subjects": return renderSubjects();
     case "dashboard": return renderDashboard();
     case "settings": return renderSettings();
@@ -487,7 +472,7 @@ async function renderToday() {
     <div class="card">
       <div class="cardHeader">
         <div>
-          <div class="cardTitle">Revisions Due</div>
+          <div class="cardTitle">Revisions</div>
           <div class="itemMeta">${pending.length} pending</div>
         </div>
       </div>
@@ -498,7 +483,7 @@ async function renderToday() {
       <div class="cardHeader">
         <div>
           <div class="cardTitle">Homework</div>
-          <div class="itemMeta">${hwToday.length} due today • ${overdue.length} overdue</div>
+          <div class="itemMeta">${hwToday.length} due • ${overdue.length} overdue</div>
         </div>
       </div>
       <div class="list" id="todayHWList"></div>
@@ -510,7 +495,7 @@ async function renderToday() {
 
   const list = $("#todayRevList");
   if (!revs.length) {
-    list.appendChild(el(`<div class="muted" style="font-weight:800">No revisions due today.</div>`));
+    list.appendChild(el(`<div class="muted" style="font-weight:800">No revisions.</div>`));
   } else {
     for (const r of revs) {
       const topic = await db.getTopic(r.topicId);
@@ -522,7 +507,7 @@ async function renderToday() {
             <span class="badge" style="background:${subj?.color || "#999"}"></span>
             <div class="itemMain">
               <div class="itemTitle">${escapeHtml(topic?.name || "Topic")}</div>
-              <div class="itemMeta">${escapeHtml(subj?.name || "Subject")} • Rev ${r.revisionNum} (Day ${r.dayInterval}) • ${r.status.toUpperCase()}</div>
+              <div class="itemMeta">${escapeHtml(subj?.name || "Subject")} • Rev ${r.revisionNum} • ${r.status.toUpperCase()}</div>
             </div>
           </div>
           <div class="row">
@@ -530,7 +515,7 @@ async function renderToday() {
               <button class="btn btnPrimary" data-done="${r.id}">Done</button>
               <button class="btn" data-skip="${r.id}">Skip</button>
             ` : `
-              <button class="btn" data-undo="${r.id}">Mark Undone</button>
+              <button class="btn" data-undo="${r.id}">Undone</button>
             `}
           </div>
         </div>
@@ -566,11 +551,11 @@ async function renderToday() {
           <span class="badge" style="background:${subj?.color || "#999"}"></span>
           <div class="itemMain">
             <div class="itemTitle">${escapeHtml(h.title)}</div>
-            <div class="itemMeta">${escapeHtml(subj?.name || "Subject")} • Due ${h.dueDate} • Priority ${h.priority.toUpperCase()}</div>
+            <div class="itemMeta">${escapeHtml(subj?.name || "Subject")} • ${h.dueDate} • ${h.priority.toUpperCase()}</div>
           </div>
         </div>
         <div class="row">
-          <button class="btn btnPrimary" data-hwdone="${h.id}">Complete</button>
+          <button class="btn btnPrimary" data-hwdone="${h.id}">Done</button>
           <button class="btn" data-hwedit="${h.id}">Edit</button>
           <button class="btn btnDanger" data-hwdel="${h.id}">Delete</button>
         </div>
@@ -579,7 +564,7 @@ async function renderToday() {
   };
 
   if (!hwToday.length && !overdue.length) {
-    hwList.appendChild(el(`<div class="muted" style="font-weight:800">No homework due today.</div>`));
+    hwList.appendChild(el(`<div class="muted" style="font-weight:800">No homework.</div>`));
   } else {
     for (const h of overdue) await renderHWItem(h, true);
     for (const h of hwToday) await renderHWItem(h, false);
@@ -605,12 +590,10 @@ async function renderToday() {
   await db.logDay(today, pending.length === 0);
 }
 
-/* ---------- CALENDAR / UPCOMING / TOPICS / HOMEWORK / SUBJECTS / DASHBOARD ---------- */
-/* (unchanged from your current version except: after rendering, call enhanceSelects/enhanceDateInputs where needed) */
-
+/* ---------- CALENDAR (shows exams too) ---------- */
 function monthInfo(year, month1to12) {
   const first = new Date(Date.UTC(year, month1to12-1, 1));
-  const startDow = (first.getUTCDay() + 6) % 7;
+  const startDow = (first.getUTCDay() + 6) % 7; // Mon=0
   const daysInMonth = new Date(Date.UTC(year, month1to12, 0)).getUTCDate();
   return { startDow, daysInMonth };
 }
@@ -623,24 +606,34 @@ async function renderCalendar() {
   const host = $("#page-calendar");
   const { startDow, daysInMonth } = monthInfo(calYear, calMonth);
 
-  const allRev = await db.revisionsInRange(`${calYear}-${String(calMonth).padStart(2,"0")}-01`, `${calYear}-${String(calMonth).padStart(2,"0")}-31`);
+  const monthPrefix = `${calYear}-${String(calMonth).padStart(2,"0")}`;
+  const allRev = await db.revisionsInRange(`${monthPrefix}-01`, `${monthPrefix}-31`);
   const allHw = await db.listHomework();
+  const allEx = await db.listExams(); // NEW
 
   const revCount = new Map();
   const hwCount = new Map();
+  const exCount = new Map();
 
   for (const r of allRev) if (r.status === "pending") revCount.set(r.scheduledDate, (revCount.get(r.scheduledDate)||0)+1);
+
   for (const h of allHw) {
     if (h.status !== "pending") continue;
-    if (h.dueDate.slice(0,7) !== `${calYear}-${String(calMonth).padStart(2,"0")}`) continue;
+    if (h.dueDate.slice(0,7) !== monthPrefix) continue;
     hwCount.set(h.dueDate, (hwCount.get(h.dueDate)||0)+1);
+  }
+
+  for (const e of allEx) {
+    const st = e.status || "scheduled";
+    if (st === "completed") continue;           // show only upcoming/scheduled on calendar counts
+    if ((e.examDate||"").slice(0,7) !== monthPrefix) continue;
+    exCount.set(e.examDate, (exCount.get(e.examDate)||0)+1);
   }
 
   const monthName = new Date(Date.UTC(calYear, calMonth-1, 1)).toLocaleDateString(undefined, { month:"long", year:"numeric" });
 
   host.innerHTML = `
     <h1 class="pageTitle">Calendar</h1>
-    <p class="pageSub">Click a date to view scheduled items.</p>
 
     <div class="card">
       <div class="rowBetween">
@@ -649,7 +642,9 @@ async function renderCalendar() {
           <button class="btn" id="calNext">Next</button>
         </div>
         <div style="font-weight:950">${escapeHtml(monthName)}</div>
-        <div class="muted" style="font-weight:800">R = revisions • H = homework</div>
+        <div class="row" style="gap:10px">
+          <button class="btn btnPrimary" id="calAddExam">Add Exam</button>
+        </div>
       </div>
 
       <hr class="sep">
@@ -665,12 +660,13 @@ async function renderCalendar() {
       <div class="cardHeader">
         <div>
           <div class="cardTitle">Selected: <span id="calSel">${calSelected}</span></div>
-          <div class="itemMeta" id="calSelMeta"></div>
         </div>
       </div>
       <div class="list" id="calDetailList"></div>
     </div>
   `;
+
+  $("#calAddExam").addEventListener("click", () => openExamModal(null, calSelected));
 
   $("#calPrev").addEventListener("click", () => {
     calMonth -= 1;
@@ -684,20 +680,29 @@ async function renderCalendar() {
   });
 
   const grid = $("#calGrid");
+
   for (let i=0;i<42;i++){
     const day = i - startDow + 1;
     if (day < 1 || day > daysInMonth) {
       grid.appendChild(el(`<div style="min-height:72px"></div>`));
       continue;
     }
-    const iso = `${calYear}-${String(calMonth).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+    const iso = `${monthPrefix}-${String(day).padStart(2,"0")}`;
     const selected = iso === calSelected;
+
     const r = revCount.get(iso)||0;
     const h = hwCount.get(iso)||0;
+    const e = exCount.get(iso)||0;
+
+    const counts = [];
+    if (r) counts.push(`${r}R`);
+    if (h) counts.push(`${h}H`);
+    if (e) counts.push(`${e}E`);
+
     const cell = el(`
       <div class="calCell ${selected ? "isSelected":""}" data-date="${iso}">
         <div class="calDay">${day}</div>
-        <div class="calCounts">${(r||h) ? `${r ? `${r}R` : ""} ${h ? `${h}H` : ""}`.trim() : ""}</div>
+        <div class="calCounts">${counts.join(" ")}</div>
       </div>
     `);
     cell.addEventListener("click", () => { calSelected = iso; renderCalendar(); });
@@ -710,50 +715,94 @@ async function renderCalendar() {
 async function renderCalendarDetails(dateISO) {
   $("#calSel").textContent = dateISO;
   const subs = await subjectsMap();
+
   const revs = await db.listRevisionsByDate(dateISO);
   const hws = await db.listHomeworkByDate(dateISO);
+  const exs = await db.listExamsByDate(dateISO);  // NEW
 
-  $("#calSelMeta").textContent = `${revs.length} revision(s), ${hws.length} homework item(s)`;
   const list = $("#calDetailList");
   list.innerHTML = "";
 
-  if (!revs.length && !hws.length) {
+  if (!revs.length && !hws.length && !exs.length) {
     list.appendChild(el(`<div class="muted" style="font-weight:800">Nothing scheduled.</div>`));
     return;
   }
 
-  for (const r of revs) {
-    const tp = await db.getTopic(r.topicId);
-    const subj = subs.get(tp.subjectId);
-    list.appendChild(el(`
-      <div class="item">
-        <div class="itemLeft">
-          <span class="badge" style="background:${subj?.color || "#999"}"></span>
-          <div class="itemMain">
-            <div class="itemTitle">${escapeHtml(tp?.name || "Topic")}</div>
-            <div class="itemMeta">${escapeHtml(subj?.name || "Subject")} • Rev ${r.revisionNum} • ${r.status.toUpperCase()}</div>
+  // Exams first (important)
+  if (exs.length) {
+    list.appendChild(el(`<div class="sectionTitle" style="margin:0">Exams</div>`));
+    for (const e of exs) {
+      const subj = subs.get(e.subjectId);
+      const st = e.status || "scheduled";
+      list.appendChild(el(`
+        <div class="item">
+          <div class="itemLeft">
+            <span class="badge" style="background:${subj?.color || "#999"}"></span>
+            <div class="itemMain">
+              <div class="itemTitle">${escapeHtml(e.title)}</div>
+              <div class="itemMeta">${escapeHtml(subj?.name || "Subject")} • ${st.toUpperCase()}</div>
+            </div>
+          </div>
+          <div class="row">
+            <button class="btn" data-exedit="${e.id}">Edit</button>
+            <button class="btn btnDanger" data-exdel="${e.id}">Delete</button>
           </div>
         </div>
-      </div>
-    `));
+      `));
+    }
+
+    $$("[data-exedit]").forEach(b => b.addEventListener("click", async () => {
+      const e = await db.getExam(parseInt(b.dataset.exedit,10));
+      openExamModal(e);
+    }));
+    $$("[data-exdel]").forEach(b => b.addEventListener("click", async () => {
+      const ok = await confirmModal({ title:"Delete exam", message:"Delete this exam?", confirmText:"Delete", danger:true });
+      if (!ok) return;
+      await db.deleteExam(parseInt(b.dataset.exdel,10));
+      toast("Deleted.");
+      await renderCalendar();
+    }));
   }
 
-  for (const h of hws) {
-    const subj = subs.get(h.subjectId);
-    list.appendChild(el(`
-      <div class="item">
-        <div class="itemLeft">
-          <span class="badge" style="background:${subj?.color || "#999"}"></span>
-          <div class="itemMain">
-            <div class="itemTitle">${escapeHtml(h.title)}</div>
-            <div class="itemMeta">${escapeHtml(subj?.name || "Subject")} • ${h.priority.toUpperCase()} • ${h.status.toUpperCase()}</div>
+  if (revs.length) {
+    list.appendChild(el(`<div class="sectionTitle" style="margin:0">Revisions</div>`));
+    for (const r of revs) {
+      const tp = await db.getTopic(r.topicId);
+      const subj = subs.get(tp.subjectId);
+      list.appendChild(el(`
+        <div class="item">
+          <div class="itemLeft">
+            <span class="badge" style="background:${subj?.color || "#999"}"></span>
+            <div class="itemMain">
+              <div class="itemTitle">${escapeHtml(tp?.name || "Topic")}</div>
+              <div class="itemMeta">${escapeHtml(subj?.name || "Subject")} • Rev ${r.revisionNum} • ${r.status.toUpperCase()}</div>
+            </div>
           </div>
         </div>
-      </div>
-    `));
+      `));
+    }
+  }
+
+  if (hws.length) {
+    list.appendChild(el(`<div class="sectionTitle" style="margin:0">Homework</div>`));
+    for (const h of hws) {
+      const subj = subs.get(h.subjectId);
+      list.appendChild(el(`
+        <div class="item">
+          <div class="itemLeft">
+            <span class="badge" style="background:${subj?.color || "#999"}"></span>
+            <div class="itemMain">
+              <div class="itemTitle">${escapeHtml(h.title)}</div>
+              <div class="itemMeta">${escapeHtml(subj?.name || "Subject")} • ${h.priority.toUpperCase()} • ${h.status.toUpperCase()}</div>
+            </div>
+          </div>
+        </div>
+      `));
+    }
   }
 }
 
+/* ---------- UPCOMING ---------- */
 async function renderUpcoming() {
   const host = $("#page-upcoming");
   const today = isoToday();
@@ -761,7 +810,6 @@ async function renderUpcoming() {
 
   host.innerHTML = `
     <h1 class="pageTitle">Upcoming</h1>
-    <p class="pageSub">Next 7 days (pending only).</p>
     <div class="list" id="upList"></div>
   `;
 
@@ -769,14 +817,19 @@ async function renderUpcoming() {
   for (let i=0;i<7;i++){
     const d = addDays(today, i);
     const revs = await db.listPendingRevisionsByDate(d);
-    const hws = (await db.listHomeworkByDate(d)).filter(h=>h.status==="pending");
 
-    const header = el(`<div class="card"><div class="rowBetween"><div style="font-weight:950">${d}</div><div class="muted" style="font-weight:850">${revs.length} revisions • ${hws.length} homework</div></div></div>`);
-    header.style.boxShadow = "none";
+    const header = el(`
+      <div class="card" style="box-shadow:none">
+        <div class="rowBetween">
+          <div style="font-weight:950">${d}</div>
+          <div class="muted" style="font-weight:850">${revs.length} revisions</div>
+        </div>
+      </div>
+    `);
     list.appendChild(header);
 
-    if (!revs.length && !hws.length) {
-      list.appendChild(el(`<div class="muted" style="padding:0 12px 12px 12px;font-weight:800">Nothing scheduled.</div>`));
+    if (!revs.length) {
+      list.appendChild(el(`<div class="muted" style="padding:0 12px 12px 12px;font-weight:800">Nothing.</div>`));
       continue;
     }
 
@@ -789,7 +842,7 @@ async function renderUpcoming() {
             <span class="badge" style="background:${subj?.color || "#999"}"></span>
             <div class="itemMain">
               <div class="itemTitle">${escapeHtml(tp?.name || "Topic")}</div>
-              <div class="itemMeta">${escapeHtml(subj?.name || "Subject")} • Rev ${r.revisionNum} (Day ${r.dayInterval})</div>
+              <div class="itemMeta">${escapeHtml(subj?.name || "Subject")} • Rev ${r.revisionNum}</div>
             </div>
           </div>
         </div>
@@ -805,7 +858,6 @@ async function renderTopics() {
 
   host.innerHTML = `
     <h1 class="pageTitle">Topics</h1>
-    <p class="pageSub">Search and filter by subject.</p>
 
     <div class="card">
       <div class="row" style="gap:10px; flex-wrap:wrap">
@@ -821,8 +873,6 @@ async function renderTopics() {
   const subjSel = $("#tpSubj");
   subjSel.appendChild(el(`<option value="">All subjects</option>`));
   for (const s of subs) subjSel.appendChild(el(`<option value="${s.id}">${escapeHtml(s.name)}</option>`));
-
-  // Make selects rounded/custom:
   enhanceSelects(host);
 
   $("#tpAdd").addEventListener("click", () => openTopicModal());
@@ -838,22 +888,19 @@ async function renderTopics() {
     list.innerHTML = "";
 
     if (!topics.length) {
-      list.appendChild(el(`<div class="muted" style="font-weight:800">No topics found.</div>`));
+      list.appendChild(el(`<div class="muted" style="font-weight:800">No topics.</div>`));
       return;
     }
 
     for (const tp of topics) {
       const subj = m.get(tp.subjectId);
-      const revs = await db.listRevisionsByTopic(tp.id);
-      const done = revs.filter(r=>r.status==="done").length;
-
       list.appendChild(el(`
         <div class="item">
           <div class="itemLeft">
             <span class="badge" style="background:${subj?.color || "#999"}"></span>
             <div class="itemMain">
               <div class="itemTitle">${escapeHtml(tp.name)}</div>
-              <div class="itemMeta">${escapeHtml(subj?.name || "Subject")} • Added ${tp.dateAdded} • ${done}/${revs.length} done</div>
+              <div class="itemMeta">${escapeHtml(subj?.name || "Subject")} • ${tp.dateAdded}</div>
             </div>
           </div>
           <div class="row">
@@ -871,7 +918,7 @@ async function renderTopics() {
 
     $$("[data-del]").forEach(b => b.addEventListener("click", async () => {
       const tp = await db.getTopic(parseInt(b.dataset.del,10));
-      const ok = await confirmModal({ title:"Delete topic", message:`Delete "${tp.name}" and its revisions?`, confirmText:"Delete", danger:true });
+      const ok = await confirmModal({ title:"Delete topic", message:`Delete "${tp.name}"?`, confirmText:"Delete", danger:true });
       if (!ok) return;
       await db.deleteTopic(tp.id);
       renderTopics();
@@ -889,7 +936,6 @@ async function renderHomework() {
 
   host.innerHTML = `
     <h1 class="pageTitle">Homework</h1>
-    <p class="pageSub">Track due dates, priorities, overdue items.</p>
 
     <div class="card">
       <div class="row" style="gap:10px; flex-wrap:wrap">
@@ -909,7 +955,6 @@ async function renderHomework() {
   const subjSel = $("#hwSubj");
   subjSel.appendChild(el(`<option value="">All subjects</option>`));
   for (const s of subs) subjSel.appendChild(el(`<option value="${s.id}">${escapeHtml(s.name)}</option>`));
-
   enhanceSelects(host);
 
   $("#hwAdd").addEventListener("click", () => openHomeworkModal());
@@ -926,7 +971,7 @@ async function renderHomework() {
     list.innerHTML = "";
 
     if (!hws.length) {
-      list.appendChild(el(`<div class="muted" style="font-weight:800">No homework found.</div>`));
+      list.appendChild(el(`<div class="muted" style="font-weight:800">No homework.</div>`));
       return;
     }
 
@@ -940,11 +985,11 @@ async function renderHomework() {
             <span class="badge" style="background:${subj?.color || "#999"}"></span>
             <div class="itemMain">
               <div class="itemTitle">${escapeHtml(h.title)}</div>
-              <div class="itemMeta">${escapeHtml(subj?.name || "Subject")} • Due ${h.dueDate} • ${h.priority.toUpperCase()} • ${h.status.toUpperCase()}</div>
+              <div class="itemMeta">${escapeHtml(subj?.name || "Subject")} • ${h.dueDate} • ${h.priority.toUpperCase()} • ${h.status.toUpperCase()}</div>
             </div>
           </div>
           <div class="row">
-            <button class="btn btnPrimary" data-toggle="${h.id}">${h.status==="pending" ? "Complete":"Mark Pending"}</button>
+            <button class="btn btnPrimary" data-toggle="${h.id}">${h.status==="pending" ? "Complete":"Pending"}</button>
             <button class="btn" data-edit="${h.id}">Edit</button>
             <button class="btn btnDanger" data-del="${h.id}">Delete</button>
           </div>
@@ -973,6 +1018,100 @@ async function renderHomework() {
   renderHWList();
 }
 
+/* ---------- EXAMS (NEW PAGE) ---------- */
+async function renderExams() {
+  const host = $("#page-exams");
+  const subs = await db.listSubjects();
+  const subsM = new Map(subs.map(s=>[s.id,s]));
+  const today = isoToday();
+
+  host.innerHTML = `
+    <h1 class="pageTitle">Exams</h1>
+
+    <div class="card">
+      <div class="row" style="gap:10px; flex-wrap:wrap">
+        <select id="exSubj" style="max-width:240px"></select>
+        <select id="exStatus" style="max-width:220px">
+          <option value="">All</option>
+          <option value="scheduled">Scheduled</option>
+          <option value="completed">Completed</option>
+        </select>
+        <button class="btn btnPrimary" id="exAdd">Add Exam</button>
+      </div>
+      <hr class="sep">
+      <div class="list" id="exList"></div>
+    </div>
+  `;
+
+  const subjSel = $("#exSubj");
+  subjSel.appendChild(el(`<option value="">All subjects</option>`));
+  for (const s of subs) subjSel.appendChild(el(`<option value="${s.id}">${escapeHtml(s.name)}</option>`));
+  enhanceSelects(host);
+
+  $("#exAdd").addEventListener("click", () => openExamModal());
+  $("#exSubj").addEventListener("change", () => renderExamList());
+  $("#exStatus").addEventListener("change", () => renderExamList());
+
+  async function renderExamList() {
+    const sid = $("#exSubj").value ? parseInt($("#exSubj").value,10) : null;
+    const st = $("#exStatus").value || null;
+    const exs = await db.listExams({ subjectId: sid, status: st });
+
+    const list = $("#exList");
+    list.innerHTML = "";
+
+    if (!exs.length) {
+      list.appendChild(el(`<div class="muted" style="font-weight:800">No exams.</div>`));
+      return;
+    }
+
+    for (const e of exs) {
+      const subj = subsM.get(e.subjectId);
+      const status = e.status || "scheduled";
+      const isPast = status !== "completed" && (e.examDate < today);
+
+      list.appendChild(el(`
+        <div class="item ${isPast ? "overdue":""}">
+          <div class="itemLeft">
+            <span class="badge" style="background:${subj?.color || "#999"}"></span>
+            <div class="itemMain">
+              <div class="itemTitle">${escapeHtml(e.title)}</div>
+              <div class="itemMeta">${escapeHtml(subj?.name || "Subject")} • ${e.examDate}${e.examTime ? (" • " + e.examTime) : ""} • ${status.toUpperCase()}</div>
+            </div>
+          </div>
+          <div class="row">
+            <button class="btn btnPrimary" data-toggle="${e.id}">${status==="scheduled" ? "Completed" : "Scheduled"}</button>
+            <button class="btn" data-edit="${e.id}">Edit</button>
+            <button class="btn btnDanger" data-del="${e.id}">Delete</button>
+          </div>
+        </div>
+      `));
+    }
+
+    $$("[data-toggle]").forEach(b => b.addEventListener("click", async () => {
+      const e = await db.getExam(parseInt(b.dataset.toggle,10));
+      const status = e.status || "scheduled";
+      e.status = (status === "scheduled") ? "completed" : "scheduled";
+      await db.updateExam(e);
+      renderExamList();
+    }));
+
+    $$("[data-edit]").forEach(b => b.addEventListener("click", async () => {
+      const e = await db.getExam(parseInt(b.dataset.edit,10));
+      openExamModal(e);
+    }));
+
+    $$("[data-del]").forEach(b => b.addEventListener("click", async () => {
+      const ok = await confirmModal({ title:"Delete exam", message:"Delete this exam?", confirmText:"Delete", danger:true });
+      if (!ok) return;
+      await db.deleteExam(parseInt(b.dataset.del,10));
+      renderExamList();
+    }));
+  }
+
+  renderExamList();
+}
+
 /* ---------- SUBJECTS ---------- */
 async function renderSubjects() {
   const host = $("#page-subjects");
@@ -980,7 +1119,6 @@ async function renderSubjects() {
 
   host.innerHTML = `
     <h1 class="pageTitle">Subjects</h1>
-    <p class="pageSub">Color-code and optionally customize revision days per subject.</p>
 
     <div class="row" style="gap:10px; margin-bottom: 12px">
       <button class="btn btnPrimary" id="subAdd">Add Subject</button>
@@ -993,22 +1131,20 @@ async function renderSubjects() {
 
   $("#subAdd").addEventListener("click", () => openSubjectModal());
   const list = $("#subList");
+  list.innerHTML = "";
 
   if (!subjects.length) {
-    list.innerHTML = `<div class="muted" style="font-weight:800">No subjects yet.</div>`;
+    list.appendChild(el(`<div class="muted" style="font-weight:800">No subjects.</div>`));
     return;
   }
 
-  list.innerHTML = "";
   for (const s of subjects) {
-    const days = s.revisionDays && s.revisionDays.length ? s.revisionDays.join(",") : "";
     list.appendChild(el(`
       <div class="item">
         <div class="itemLeft">
           <span class="badge" style="background:${s.color}"></span>
           <div class="itemMain">
             <div class="itemTitle">${escapeHtml(s.name)}</div>
-            <div class="itemMeta">${days ? `Custom days: ${escapeHtml(days)}` : "Uses global revision days"}</div>
           </div>
         </div>
         <div class="row">
@@ -1023,21 +1159,21 @@ async function renderSubjects() {
     const s = await db.getSubject(parseInt(b.dataset.edit,10));
     openSubjectModal(s);
   }));
+
   $$("[data-del]").forEach(b => b.addEventListener("click", async () => {
     const s = await db.getSubject(parseInt(b.dataset.del,10));
-    const ok = await confirmModal({ title:"Delete subject", message:`Delete "${s.name}" and ALL its data?`, confirmText:"Delete", danger:true });
+    const ok = await confirmModal({ title:"Delete subject", message:`Delete "${s.name}"?`, confirmText:"Delete", danger:true });
     if (!ok) return;
     await db.deleteSubject(s.id);
     renderSubjects();
   }));
 }
 
-/* ---------- DASHBOARD (kept) ---------- */
+/* ---------- DASHBOARD (unchanged minimal) ---------- */
 async function renderDashboard() {
   const host = $("#page-dashboard");
   host.innerHTML = `
     <h1 class="pageTitle">Dashboard</h1>
-    <p class="pageSub">Weekly/Monthly stats, completion rate, streak.</p>
 
     <div class="rowBetween" style="margin-bottom: 12px">
       <div class="segment">
@@ -1047,11 +1183,11 @@ async function renderDashboard() {
     </div>
 
     <div class="grid4" id="dashCards"></div>
+
     <div class="card" style="margin-top:14px">
       <div class="cardHeader">
         <div>
-          <div class="cardTitle" id="dashChartTitle">Revisions (This Week)</div>
-          <div class="itemMeta" id="dashChartMeta"></div>
+          <div class="cardTitle" id="dashChartTitle">Revisions</div>
         </div>
       </div>
       <div id="dashChart"></div>
@@ -1102,13 +1238,10 @@ async function renderDashContent(mode) {
       <div style="font-size:28px;font-weight:950;margin-top:4px">${escapeHtml(value)}</div>
     </div>
   `);
-  cards.appendChild(card("Topics studied", String(topicsAdded)));
-  cards.appendChild(card("Revisions done", `${done}/${total}`));
-  cards.appendChild(card("Completion rate", `${rate}%`));
-  cards.appendChild(card("Streak", `${streak} days`));
-
-  $("#dashChartTitle").textContent = mode==="week" ? "Revisions (This Week)" : "Revisions (This Month)";
-  $("#dashChartMeta").textContent = `${total} total • ${done} done`;
+  cards.appendChild(card("Topics", String(topicsAdded)));
+  cards.appendChild(card("Done", `${done}/${total}`));
+  cards.appendChild(card("Rate", `${rate}%`));
+  cards.appendChild(card("Streak", `${streak}`));
 
   const days = [];
   if (mode === "week") for (let i=0;i<7;i++) days.push(addDays(start, i));
@@ -1153,7 +1286,7 @@ async function renderDashContent(mode) {
   host.appendChild(chart);
 }
 
-/* ---------- SETTINGS (NO Save buttons + NO browser popup) ---------- */
+/* ---------- SETTINGS (removed extra texts) ---------- */
 function debounce(fn, ms){
   let t;
   return (...args) => {
@@ -1170,11 +1303,9 @@ async function renderSettings() {
   const globalDays = (await db.getSetting("global_revision_days")) || "3,7,14,28";
   const weekly = (await db.getSetting("weekly_holidays")) || "";
   const weeklySet = new Set(weekly.split(",").map(x=>parseInt(x,10)).filter(Number.isFinite));
-  const holidays = await db.listHolidays();
 
   host.innerHTML = `
     <h1 class="pageTitle">Settings</h1>
-    <p class="pageSub">Everything here auto-saves (no Save buttons).</p>
 
     <div class="grid2">
       <div class="card">
@@ -1189,7 +1320,7 @@ async function renderSettings() {
           </div>
 
           <div style="flex:1">
-            <div class="muted" style="font-weight:900">Font size (Sonoma feel = 13)</div>
+            <div class="muted" style="font-weight:900">Font size</div>
             <input id="setSize" class="input" type="number" min="10" max="22" value="${escapeHtml(size)}">
           </div>
         </div>
@@ -1201,22 +1332,19 @@ async function renderSettings() {
             ${FONT_SUGGESTIONS.map(f=>`<option value="${escapeHtml(f)}"></option>`).join("")}
           </datalist>
         </div>
-
-        <div class="itemMeta" style="margin-top:10px">Changes apply instantly.</div>
       </div>
 
       <div class="card">
         <div class="cardTitle">Revision Settings</div>
         <div style="margin-top:10px">
-          <div class="muted" style="font-weight:900">Global revision days (comma-separated)</div>
+          <div class="muted" style="font-weight:900">Global revision days</div>
           <input id="setDays" class="input" value="${escapeHtml(globalDays)}" placeholder="3,7,14,28">
-          <div class="itemMeta" style="margin-top:8px">Applies to new topics (unless subject has custom days).</div>
         </div>
       </div>
     </div>
 
     <div class="card" style="margin-top:14px">
-      <div class="cardTitle">Holidays (affect revisions only, not homework)</div>
+      <div class="cardTitle">Holidays</div>
 
       <div class="sectionTitle">Weekly off days</div>
       <div class="row" style="flex-wrap:wrap; gap:14px">
@@ -1231,7 +1359,7 @@ async function renderSettings() {
       <div class="sectionTitle">Specific holidays</div>
       <div class="row" style="gap:10px; flex-wrap:wrap">
         <input id="holDate" class="input" data-date="1" placeholder="YYYY-MM-DD" style="max-width:200px" value="">
-        <input id="holDesc" class="input" placeholder="Description (optional)" style="max-width:340px">
+        <input id="holDesc" class="input" placeholder="Description" style="max-width:340px">
         <button class="btn btnPrimary" id="holAdd">Add</button>
       </div>
 
@@ -1249,7 +1377,6 @@ async function renderSettings() {
     </div>
   `;
 
-  // Enhance custom controls in settings page:
   enhanceSelects(host);
   enhanceDateInputs(host);
 
@@ -1263,7 +1390,7 @@ async function renderSettings() {
     await db.setSetting("font_size", sz);
     applyAppearance({ theme: th, font: ff, size: sz });
     toast("Saved.");
-  }, 250);
+  }, 200);
 
   $("#setTheme").addEventListener("change", saveAppearanceDebounced);
   $("#setFont").addEventListener("input", saveAppearanceDebounced);
@@ -1271,17 +1398,17 @@ async function renderSettings() {
 
   const saveDaysDebounced = debounce(async () => {
     const days = parseDaysCSV($("#setDays").value);
-    if (!days.length) return; // don’t spam error while typing
+    if (!days.length) return;
     await db.setSetting("global_revision_days", days.join(","));
-    toast("Revision days saved.");
-  }, 450);
+    toast("Saved.");
+  }, 350);
 
   $("#setDays").addEventListener("input", saveDaysDebounced);
   $("#setDays").addEventListener("blur", async () => {
     const days = parseDaysCSV($("#setDays").value);
-    if (!days.length) return toast("Invalid days. Example: 3,7,14,28", "error");
+    if (!days.length) return toast("Invalid.", "error");
     await db.setSetting("global_revision_days", days.join(","));
-    toast("Revision days saved.");
+    toast("Saved.");
   });
 
   // weekly off auto-save
@@ -1300,7 +1427,7 @@ async function renderSettings() {
     const hs = await db.listHolidays();
     holList.innerHTML = "";
     if (!hs.length) {
-      holList.appendChild(el(`<div class="muted" style="font-weight:800">No holidays added.</div>`));
+      holList.appendChild(el(`<div class="muted" style="font-weight:800">No holidays.</div>`));
       return;
     }
     for (const h of hs) {
@@ -1331,26 +1458,26 @@ async function renderSettings() {
   $("#holAdd").addEventListener("click", async () => {
     const d = $("#holDate").value;
     const desc = $("#holDesc").value.trim();
-    if (!d) return toast("Choose a holiday date.", "error");
+    if (!d) return toast("Choose date.", "error");
     try{
       await db.addHoliday({ date: d, description: desc });
       $("#holDesc").value = "";
       $("#holDate").value = "";
-      toast("Holiday added.");
+      toast("Added.");
       renderHol();
     }catch{
-      toast("This holiday date already exists.", "error");
+      toast("Already exists.", "error");
     }
   });
 
-  // exports (use your existing functions if present in your file; otherwise keep as is)
-  $("#expJson").addEventListener("click", () => toast("Export functions are unchanged in this patch."));
-  $("#expCsv").addEventListener("click", () => toast("Export functions are unchanged in this patch."));
-  $("#expXlsx").addEventListener("click", () => toast("Export functions are unchanged in this patch."));
-  $("#expPdf").addEventListener("click", () => toast("Export functions are unchanged in this patch."));
+  // exports
+  $("#expJson").addEventListener("click", exportJSON);
+  $("#expCsv").addEventListener("click", exportCSV);
+  $("#expXlsx").addEventListener("click", exportXLSX);
+  $("#expPdf").addEventListener("click", exportPDF);
 }
 
-/* ---------- SUBJECT/TOPIC/HW MODALS (date inputs now use data-date=1) ---------- */
+/* ---------- Modals ---------- */
 async function openSubjectModal(existing=null) {
   const isEdit = !!existing;
   const colors = ["#FF6B6B","#4ECDC4","#45B7D1","#96CEB4","#FFEAA7","#DDA0DD","#85C1E9","#E67E22","#2ECC71","#9B59B6"];
@@ -1369,10 +1496,10 @@ async function openSubjectModal(existing=null) {
 
       <label class="row" style="gap:10px; font-weight:900; margin-top:6px">
         <input type="checkbox" name="useCustom" ${existing?.revisionDays?.length ? "checked":""}>
-        Use custom revision days for this subject
+        Custom revision days
       </label>
 
-      <input class="input" name="customDays" placeholder="Example: 1,3,7,14,28"
+      <input class="input" name="customDays" placeholder="1,3,7,14,28"
         value="${escapeHtml(existing?.revisionDays?.join(",") || "")}">
     `,
     onSubmit: async (fd) => {
@@ -1381,17 +1508,17 @@ async function openSubjectModal(existing=null) {
       const useCustom = fd.get("useCustom") === "on";
       const customDays = useCustom ? parseDaysCSV(fd.get("customDays")) : null;
 
-      if (!name) return toast("Enter subject name.","error"), false;
+      if (!name) return toast("Enter name.", "error"), false;
 
       if (isEdit) {
         existing.name = name;
         existing.color = color;
         existing.revisionDays = customDays && customDays.length ? customDays : null;
         try { await db.updateSubject(existing); }
-        catch { toast("Subject name already exists.","error"); return false; }
+        catch { toast("Name exists.", "error"); return false; }
       } else {
         try { await db.addSubject({ name, color, revisionDays: (customDays && customDays.length ? customDays : null) }); }
-        catch { toast("Subject name already exists.","error"); return false; }
+        catch { toast("Name exists.", "error"); return false; }
       }
       toast("Saved.");
       await render("subjects");
@@ -1403,7 +1530,7 @@ async function openSubjectModal(existing=null) {
 async function openTopicModal(existing=null) {
   const isEdit = !!existing;
   const subs = await db.listSubjects();
-  if (!subs.length) return toast("Add a subject first.","error");
+  if (!subs.length) return toast("Add subject first.", "error");
 
   showModal({
     title: isEdit ? "Edit Topic" : "Add Topic",
@@ -1414,18 +1541,18 @@ async function openTopicModal(existing=null) {
         ${subs.map(s => `<option value="${s.id}" ${existing?.subjectId===s.id?"selected":""}>${escapeHtml(s.name)}</option>`).join("")}
       </select>
 
-      <label class="muted" style="font-weight:900">Topic name</label>
+      <label class="muted" style="font-weight:900">Topic</label>
       <input class="input" name="name" value="${escapeHtml(existing?.name || "")}" required>
 
       ${isEdit ? "" : `
-        <label class="muted" style="font-weight:900">Date studied</label>
+        <label class="muted" style="font-weight:900">Date</label>
         <input class="input" name="dateAdded" data-date="1" value="${isoToday()}" placeholder="YYYY-MM-DD" required>
       `}
     `,
     onSubmit: async (fd) => {
       const subjectId = parseInt(fd.get("subjectId"),10);
       const name = (fd.get("name")||"").trim();
-      if (!name) return toast("Enter topic name.","error"), false;
+      if (!name) return toast("Enter topic.", "error"), false;
 
       if (isEdit) {
         existing.subjectId = subjectId;
@@ -1457,7 +1584,7 @@ async function openTopicModal(existing=null) {
 async function openHomeworkModal(existing=null) {
   const isEdit = !!existing;
   const subs = await db.listSubjects();
-  if (!subs.length) return toast("Add a subject first.","error");
+  if (!subs.length) return toast("Add subject first.", "error");
 
   showModal({
     title: isEdit ? "Edit Homework" : "Add Homework",
@@ -1472,7 +1599,7 @@ async function openHomeworkModal(existing=null) {
       <input class="input" name="title" value="${escapeHtml(existing?.title || "")}" required>
 
       <label class="muted" style="font-weight:900">Description</label>
-      <textarea name="description" placeholder="Optional">${escapeHtml(existing?.description || "")}</textarea>
+      <textarea name="description" placeholder="">${escapeHtml(existing?.description || "")}</textarea>
 
       <div class="grid2">
         <div>
@@ -1493,7 +1620,7 @@ async function openHomeworkModal(existing=null) {
       const description = (fd.get("description")||"").trim();
       const dueDate = fd.get("dueDate") || isoToday();
       const priority = fd.get("priority") || "medium";
-      if (!title) return toast("Enter homework title.","error"), false;
+      if (!title) return toast("Enter title.", "error"), false;
 
       if (isEdit) {
         existing.subjectId = subjectId;
@@ -1510,6 +1637,239 @@ async function openHomeworkModal(existing=null) {
       return true;
     }
   });
+}
+
+async function openExamModal(existing=null, defaultDate=null) {
+  const isEdit = !!existing;
+  const subs = await db.listSubjects();
+  if (!subs.length) return toast("Add subject first.", "error");
+
+  const examDate = existing?.examDate || defaultDate || isoToday();
+  const examTime = existing?.examTime || "";
+
+  showModal({
+    title: isEdit ? "Edit Exam" : "Add Exam",
+    submitText: isEdit ? "Save" : "Add",
+    body: `
+      <label class="muted" style="font-weight:900">Subject</label>
+      <select name="subjectId">
+        ${subs.map(s => `<option value="${s.id}" ${existing?.subjectId===s.id?"selected":""}>${escapeHtml(s.name)}</option>`).join("")}
+      </select>
+
+      <label class="muted" style="font-weight:900">Title</label>
+      <input class="input" name="title" value="${escapeHtml(existing?.title || "")}" required>
+
+      <label class="muted" style="font-weight:900">Details</label>
+      <textarea name="description" placeholder="">${escapeHtml(existing?.description || "")}</textarea>
+
+      <div class="grid2">
+        <div>
+          <label class="muted" style="font-weight:900">Exam date</label>
+          <input class="input" name="examDate" data-date="1" value="${escapeHtml(examDate)}" placeholder="YYYY-MM-DD" required>
+        </div>
+        <div>
+          <label class="muted" style="font-weight:900">Time</label>
+          <input class="input" name="examTime" value="${escapeHtml(examTime)}" placeholder="HH:MM (optional)">
+        </div>
+      </div>
+
+      <div class="grid2">
+        <div>
+          <label class="muted" style="font-weight:900">Status</label>
+          <select name="status">
+            <option value="scheduled" ${(existing?.status||"scheduled")==="scheduled"?"selected":""}>Scheduled</option>
+            <option value="completed" ${(existing?.status||"scheduled")==="completed"?"selected":""}>Completed</option>
+          </select>
+        </div>
+        <div></div>
+      </div>
+    `,
+    onSubmit: async (fd) => {
+      const subjectId = parseInt(fd.get("subjectId"),10);
+      const title = (fd.get("title")||"").trim();
+      const description = (fd.get("description")||"").trim();
+      const examDate = (fd.get("examDate")||"").trim();
+      const examTime = (fd.get("examTime")||"").trim();
+      const status = fd.get("status") || "scheduled";
+
+      if (!title) return toast("Enter title.", "error"), false;
+      if (!examDate) return toast("Choose date.", "error"), false;
+
+      if (isEdit) {
+        existing.subjectId = subjectId;
+        existing.title = title;
+        existing.description = description;
+        existing.examDate = examDate;
+        existing.examTime = examTime;
+        existing.status = status;
+        await db.updateExam(existing);
+      } else {
+        await db.addExam({
+          subjectId,
+          title,
+          description,
+          examDate,
+          examTime,
+          status,
+          dateAdded: isoToday()
+        });
+      }
+
+      toast("Saved.");
+      // refresh current page and calendar state
+      await render("exams");
+      return true;
+    }
+  });
+}
+
+/* ---------- EXPORTS (real) ---------- */
+function downloadBlob(filename, blob) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(url), 5000);
+}
+
+async function exportJSON() {
+  const data = {
+    exported: new Date().toISOString(),
+    subjects: await db.listSubjects(),
+    topics: await db.listTopics(),
+    revisions: await db.revisionsInRange("0000-01-01","9999-12-31"),
+    homework: await db.listHomework(),
+    exams: await db.listExams(),
+    holidays: await db.listHolidays(),
+    settings: {
+      theme: await db.getSetting("theme"),
+      font_family: await db.getSetting("font_family"),
+      font_size: await db.getSetting("font_size"),
+      global_revision_days: await db.getSetting("global_revision_days"),
+      weekly_holidays: await db.getSetting("weekly_holidays"),
+      last_opened: await db.getSetting("last_opened"),
+    }
+  };
+  downloadBlob("studyloop_backup.json", new Blob([JSON.stringify(data,null,2)], { type:"application/json" }));
+  toast("Exported.");
+}
+
+async function exportCSV() {
+  const subs = await subjectsMap();
+  const topics = await db.listTopics();
+  const topicsM = new Map(topics.map(t=>[t.id,t]));
+  const revisions = await db.revisionsInRange("0000-01-01","9999-12-31");
+
+  const rows = [["Topic","Subject","Date Added","Revision #","Interval Day","Scheduled Date","Status"]];
+  for (const r of revisions) {
+    const t = topicsM.get(r.topicId);
+    const s = subs.get(t?.subjectId);
+    rows.push([
+      t?.name || "",
+      s?.name || "",
+      t?.dateAdded || "",
+      r.revisionNum,
+      r.dayInterval,
+      r.scheduledDate,
+      r.status
+    ]);
+  }
+  const csv = rows.map(r => r.map(x => `"${String(x).replaceAll('"','""')}"`).join(",")).join("\n");
+  downloadBlob("studyloop_data.csv", new Blob([csv], { type:"text/csv" }));
+  toast("Exported.");
+}
+
+async function exportXLSX() {
+  if (!window.XLSX) return toast("XLSX not loaded.", "error");
+
+  const subs = await subjectsMap();
+  const topics = await db.listTopics();
+  const topicsM = new Map(topics.map(t=>[t.id,t]));
+  const revisions = await db.revisionsInRange("0000-01-01","9999-12-31");
+  const homework = await db.listHomework();
+  const exams = await db.listExams();
+
+  const revRows = revisions.map(r => {
+    const t = topicsM.get(r.topicId);
+    const s = subs.get(t?.subjectId);
+    return {
+      Topic: t?.name || "",
+      Subject: s?.name || "",
+      "Date Added": t?.dateAdded || "",
+      "Revision #": r.revisionNum,
+      "Interval Day": r.dayInterval,
+      "Scheduled Date": r.scheduledDate,
+      Status: r.status
+    };
+  });
+
+  const hwRows = homework.map(h => {
+    const s = subs.get(h.subjectId);
+    return {
+      Title: h.title,
+      Subject: s?.name || "",
+      "Due Date": h.dueDate,
+      Priority: h.priority,
+      Status: h.status,
+      Description: h.description || ""
+    };
+  });
+
+  const exRows = exams.map(e => {
+    const s = subs.get(e.subjectId);
+    return {
+      Title: e.title,
+      Subject: s?.name || "",
+      "Exam Date": e.examDate,
+      Time: e.examTime || "",
+      Status: e.status || "scheduled",
+      Details: e.description || ""
+    };
+  });
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(revRows), "Revisions");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(hwRows), "Homework");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(exRows), "Exams");
+
+  const out = XLSX.write(wb, { bookType:"xlsx", type:"array" });
+  downloadBlob("studyloop_data.xlsx", new Blob([out], { type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+  toast("Exported.");
+}
+
+async function exportPDF() {
+  const jspdf = window.jspdf;
+  if (!jspdf) return toast("PDF not loaded.", "error");
+
+  const { jsPDF } = jspdf;
+  const doc = new jsPDF({ unit:"pt", format:"a4" });
+
+  doc.setFont("helvetica","bold");
+  doc.setFontSize(18);
+  doc.text("StudyLoop Report", 40, 55);
+
+  doc.setFont("helvetica","normal");
+  doc.setFontSize(11);
+  doc.text(`Generated: ${new Date().toLocaleString()}`, 40, 75);
+
+  const exams = await db.listExams();
+  const homework = await db.listHomework();
+  const topics = await db.listTopics();
+  const revs = await db.revisionsInRange("0000-01-01","9999-12-31");
+
+  let y = 110;
+  const line = (text) => { doc.text(text, 40, y); y += 18; };
+
+  doc.setFont("helvetica","bold"); line("Summary");
+  doc.setFont("helvetica","normal");
+  line(`Topics: ${topics.length}`);
+  line(`Revisions: ${revs.length}`);
+  line(`Homework: ${homework.length}`);
+  line(`Exams: ${exams.length}`);
+
+  doc.save("studyloop_report.pdf");
+  toast("Exported.");
 }
 
 /* ---------- Start ---------- */
