@@ -1,4 +1,4 @@
-const CACHE = "studyloop-cache-v400"; // <-- changed v1 -> v2
+const CACHE = "studyloop-cache-v402"; // <-- changed v1 -> v2
 const CORE = [
   "./",
   "./index.html",
