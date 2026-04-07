@@ -431,6 +431,10 @@ async function topicsMap() {
   const topics = await db.listTopics();
   return new Map(topics.map(t => [t.id, t]));
 }
+function currentPageName() {
+  const page = $(".page.isVisible");
+  return page ? page.id.replace("page-", "") : "today";
+}
 
 /* archive helpers */
 async function updateTopicArchive(topicId) {
