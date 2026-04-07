@@ -14,6 +14,12 @@ function el(html) {
   return t.content.firstElementChild;
 }
 function escapeHtml(s){ return String(s ?? "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;"); }
+
+function currentPageName() {
+  const page = $(".page.isVisible");
+  return page ? page.id.replace("page-", "") : "today";
+}
+
 function countdownText(dateStr) {
   const diff = Math.ceil((new Date(dateStr + "T00:00:00") - new Date(isoToday() + "T00:00:00")) / 86400000);
   if (diff < 0) return `${Math.abs(diff)} day${Math.abs(diff) === 1 ? "" : "s"} ago`;
@@ -21,18 +27,29 @@ function countdownText(dateStr) {
   if (diff === 1) return "Tomorrow";
   return `${diff} days left`;
 }
+
 function parseChecklistText(text) {
-  return String(text || "").split("\n").map(x => x.trim()).filter(Boolean).map(x => ({ text: x, done: false }));
+  return String(text || "")
+    .split("\n")
+    .map(x => x.trim())
+    .filter(Boolean)
+    .map(x => ({ text: x, done: false }));
 }
+
 function checklistToText(items) {
-  return (items || []).map(x => typeof x === "string" ? x : x.text).filter(Boolean).join("\n");
+  return (items || [])
+    .map(x => typeof x === "string" ? x : x.text)
+    .filter(Boolean)
+    .join("\n");
 }
-function isArchived(x) { return !!x.archived; }
-function visibleOnly(arr) { return arr.filter(x => !isArchived(x)); }
+
+function visibleOnly(arr) {
+  return (arr || []).filter(x => !x.archived);
+}
 
 let db;
 
-/* toast */
+/* ---------------- Toast ---------------- */
 let toastHost;
 function ensureToastHost(){
   if (toastHost) return toastHost;
@@ -48,43 +65,50 @@ function toast(msg, type="success"){
   setTimeout(() => node.remove(), 1800);
 }
 
-/* overlay */
+/* ---------------- Overlay ---------------- */
 let overlayHost;
 function ensureOverlayHost(){
   if (overlayHost) return overlayHost;
   overlayHost = document.createElement("div");
   overlayHost.className = "overlayHost hidden";
-  overlayHost.addEventListener("click", (e) => { if (e.target === overlayHost) closeOverlay(); });
-  window.addEventListener("keydown", (e) => { if (e.key === "Escape") closeOverlay(); });
+  overlayHost.addEventListener("click", (e) => {
+    if (e.target === overlayHost) closeOverlay();
+  });
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeOverlay();
+  });
   document.body.appendChild(overlayHost);
   return overlayHost;
 }
-function closeOverlay(){
+function closeOverlay() {
   ensureOverlayHost();
   overlayHost.classList.add("hidden");
   overlayHost.innerHTML = "";
 }
-function openOverlay(node){
+function openOverlay(node) {
   ensureOverlayHost();
   overlayHost.innerHTML = "";
   overlayHost.appendChild(node);
   overlayHost.classList.remove("hidden");
 }
 
-/* custom select */
+/* ---------------- Custom Select ---------------- */
 function enhanceSelects(root){
   $$("select", root).forEach(sel => {
     if (sel.dataset.enhanced === "1") return;
     sel.dataset.enhanced = "1";
+
     const proxy = document.createElement("button");
     proxy.type = "button";
     proxy.className = "selectProxy";
     const style = sel.getAttribute("style");
     if (style) proxy.setAttribute("style", style);
+
     const sync = () => {
       const opt = sel.options[sel.selectedIndex];
       proxy.textContent = opt ? opt.text : "Select";
     };
+
     sync();
     sel.style.display = "none";
     sel.insertAdjacentElement("beforebegin", proxy);
@@ -92,8 +116,10 @@ function enhanceSelects(root){
     proxy.addEventListener("click", () => openSelectDropdown(sel, proxy));
   });
 }
+
 function openSelectDropdown(sel, anchorBtn){
   closeOverlay();
+
   const rect = anchorBtn.getBoundingClientRect();
   const menu = document.createElement("div");
   menu.className = "dropdownMenu";
@@ -103,25 +129,31 @@ function openSelectDropdown(sel, anchorBtn){
     const div = document.createElement("div");
     div.className = "dropdownItem" + (sel.selectedIndex === i ? " isSelected" : "");
     div.textContent = opt.text;
+
     div.addEventListener("click", () => {
       sel.selectedIndex = i;
       sel.dispatchEvent(new Event("change", { bubbles:true }));
       closeOverlay();
     });
+
     menu.appendChild(div);
   });
 
   openOverlay(menu);
-  const h = menu.getBoundingClientRect().height;
+
   const pad = 8;
+  const menuRect = menu.getBoundingClientRect();
   let top = rect.bottom + pad;
-  if (window.innerHeight - rect.bottom < h + 16) top = Math.max(16, rect.top - h - pad);
-  let left = Math.min(rect.left, window.innerWidth - menu.getBoundingClientRect().width - 16);
+  if (window.innerHeight - rect.bottom < menuRect.height + 16) {
+    top = Math.max(16, rect.top - menuRect.height - pad);
+  }
+  const left = Math.min(rect.left, window.innerWidth - menuRect.width - 16);
+
   menu.style.top = `${top}px`;
   menu.style.left = `${left}px`;
 }
 
-/* custom date input */
+/* ---------------- Custom Date Picker ---------------- */
 function enhanceDateInputs(root){
   $$("input[data-date='1']", root).forEach(inp => {
     if (inp.dataset.enhanced === "1") return;
@@ -130,6 +162,7 @@ function enhanceDateInputs(root){
     inp.addEventListener("click", () => openDatePicker(inp));
   });
 }
+
 function openDatePicker(inputEl){
   closeOverlay();
 
@@ -146,10 +179,11 @@ function openDatePicker(inputEl){
   const buildDays = (startDow, daysInMonth) => {
     const today = isoToday();
     const cells = [];
-    for (let i=0;i<42;i++){
+    for (let i = 0; i < 42; i++) {
       const day = i - startDow + 1;
-      if (day < 1 || day > daysInMonth) cells.push(`<div class="dateDay isMuted"></div>`);
-      else {
+      if (day < 1 || day > daysInMonth) {
+        cells.push(`<div class="dateDay isMuted"></div>`);
+      } else {
         const iso = `${year}-${String(month + 1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
         const cls = ["dateDay", iso === selected ? "isSelected" : "", iso === today ? "isToday" : ""].filter(Boolean).join(" ");
         cells.push(`<div class="${cls}" data-day="${iso}">${day}</div>`);
@@ -162,16 +196,18 @@ function openDatePicker(inputEl){
     const first = new Date(year, month, 1);
     const startDow = (first.getDay() + 6) % 7;
     const daysInMonth = new Date(year, month + 1, 0).getDate();
+
     pop.innerHTML = `
       <div class="dateHead">
         <div class="dateHeadTitle">${first.toLocaleDateString(undefined, { month:"long", year:"numeric" })}</div>
         <div class="dateHeadBtns">
-          <button type="button" class="dateMiniBtn" data-prev>◀</button>
-          <button type="button" class="dateMiniBtn" data-next>▶</button>
-          <button type="button" class="dateMiniBtn" data-today>Today</button>
-          <button type="button" class="dateMiniBtn" data-clear>Clear</button>
+          <button class="dateMiniBtn" type="button" data-prev>◀</button>
+          <button class="dateMiniBtn" type="button" data-next>▶</button>
+          <button class="dateMiniBtn" type="button" data-today>Today</button>
+          <button class="dateMiniBtn" type="button" data-clear>Clear</button>
         </div>
       </div>
+
       <div class="dateGrid">
         ${["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(d => `<div class="dateDow">${d}</div>`).join("")}
         ${buildDays(startDow, daysInMonth)}
@@ -179,26 +215,34 @@ function openDatePicker(inputEl){
     `;
 
     $("[data-prev]", pop).addEventListener("click", () => {
-      month -= 1; if (month < 0) { month = 11; year -= 1; } render();
+      month -= 1;
+      if (month < 0) { month = 11; year -= 1; }
+      render();
     });
+
     $("[data-next]", pop).addEventListener("click", () => {
-      month += 1; if (month > 11) { month = 0; year += 1; } render();
+      month += 1;
+      if (month > 11) { month = 0; year += 1; }
+      render();
     });
+
     $("[data-today]", pop).addEventListener("click", () => {
       inputEl.value = isoToday();
       inputEl.dispatchEvent(new Event("input", { bubbles:true }));
       inputEl.dispatchEvent(new Event("change", { bubbles:true }));
       closeOverlay();
     });
+
     $("[data-clear]", pop).addEventListener("click", () => {
       inputEl.value = "";
       inputEl.dispatchEvent(new Event("input", { bubbles:true }));
       inputEl.dispatchEvent(new Event("change", { bubbles:true }));
       closeOverlay();
     });
+
     $$("[data-day]", pop).forEach(btn => btn.addEventListener("click", () => {
-      inputEl.value = btn.dataset.day;
       selected = btn.dataset.day;
+      inputEl.value = selected;
       inputEl.dispatchEvent(new Event("input", { bubbles:true }));
       inputEl.dispatchEvent(new Event("change", { bubbles:true }));
       closeOverlay();
@@ -210,21 +254,24 @@ function openDatePicker(inputEl){
 
   const rect = inputEl.getBoundingClientRect();
   const pad = 8;
+  const popRect = pop.getBoundingClientRect();
   let top = rect.bottom + pad;
-  let left = rect.left;
-  const ph = pop.getBoundingClientRect().height;
-  if (window.innerHeight - rect.bottom < ph + 16) top = Math.max(16, rect.top - ph - pad);
-  left = Math.min(left, window.innerWidth - pop.getBoundingClientRect().width - 16);
+  if (window.innerHeight - rect.bottom < popRect.height + 16) {
+    top = Math.max(16, rect.top - popRect.height - pad);
+  }
+  const left = Math.min(rect.left, window.innerWidth - popRect.width - 16);
+
   pop.style.top = `${top}px`;
   pop.style.left = `${left}px`;
 }
 
-/* color swatches */
+/* ---------------- Color Controls ---------------- */
 function enhanceColorControls(root){
   const hidden = $("input[name='color']", root);
   const custom = $("input[name='customColor']", root);
   const preview = $("[data-color-preview]", root);
   const swatches = $$(".colorSwatch", root);
+
   if (!hidden || !custom || !preview || !swatches.length) return;
 
   const sync = (value) => {
@@ -234,12 +281,12 @@ function enhanceColorControls(root){
     swatches.forEach(b => b.classList.toggle("isSelected", b.dataset.color === value));
   };
 
-  swatches.forEach(b => b.addEventListener("click", () => sync(b.dataset.color)));
+  swatches.forEach(btn => btn.addEventListener("click", () => sync(btn.dataset.color)));
   custom.addEventListener("input", () => sync(custom.value));
   sync(hidden.value || custom.value || SUBJECT_SWATCHES[0]);
 }
 
-/* modal */
+/* ---------------- Modal ---------------- */
 function showModal({ title, body, onSubmit, submitText="Save", wide=false }) {
   const host = $("#modalHost");
   host.classList.remove("hidden");
@@ -274,9 +321,7 @@ function showModal({ title, body, onSubmit, submitText="Save", wide=false }) {
   };
 
   $$("[data-close]", host).forEach(b => b.addEventListener("click", close));
-  host.addEventListener("click", (e) => {
-    if (e.target === host) close();
-  }, { once:true });
+  host.addEventListener("click", (e) => { if (e.target === host) close(); }, { once:true });
 
   const form = $("[data-form]", host);
   const submitBtn = $("[data-submit]", host);
@@ -306,34 +351,39 @@ function showModal({ title, body, onSubmit, submitText="Save", wide=false }) {
     busy = false;
   });
 }
+
 function confirmModal({ title="Confirm", message="Are you sure?", confirmText="OK", danger=false }) {
   return new Promise((resolve) => {
     const host = $("#modalHost");
     host.classList.remove("hidden");
     host.setAttribute("aria-hidden","false");
     host.innerHTML = "";
+
     const modal = el(`
-      <div class="modal">
+      <div class="modal" role="dialog" aria-modal="true">
         <div class="modalHeader">
           <div class="modalTitle">${escapeHtml(title)}</div>
           <button class="btn btnGhost" data-close>Close</button>
         </div>
         <div class="modalBody">
-          <div class="card" style="box-shadow:none"><div style="font-weight:900">${escapeHtml(message)}</div></div>
+          <div class="card" style="box-shadow:none">
+            <div style="font-weight:900">${escapeHtml(message)}</div>
+          </div>
           <div class="modalFooter">
             <button class="btn" type="button" data-cancel>Cancel</button>
-            <button class="btn ${danger ? "btnDanger":"btnPrimary"}" type="button" data-ok>${escapeHtml(confirmText)}</button>
+            <button class="btn ${danger ? "btnDanger" : "btnPrimary"}" type="button" data-ok>${escapeHtml(confirmText)}</button>
           </div>
         </div>
       </div>
     `);
+
     host.appendChild(modal);
 
-    const close = (v) => {
+    const close = (result) => {
       host.classList.add("hidden");
       host.setAttribute("aria-hidden","true");
       host.innerHTML = "";
-      resolve(v);
+      resolve(result);
     };
 
     $("[data-close]", host).addEventListener("click", () => close(false));
@@ -342,14 +392,16 @@ function confirmModal({ title="Confirm", message="Are you sure?", confirmText="O
     host.addEventListener("click", (e) => { if (e.target === host) close(false); }, { once:true });
   });
 }
+
 function importModeModal() {
   return new Promise((resolve) => {
     const host = $("#modalHost");
     host.classList.remove("hidden");
     host.setAttribute("aria-hidden","false");
     host.innerHTML = "";
+
     const modal = el(`
-      <div class="modal">
+      <div class="modal" role="dialog" aria-modal="true">
         <div class="modalHeader">
           <div class="modalTitle">Import backup</div>
           <button class="btn btnGhost" data-close>Close</button>
@@ -357,7 +409,6 @@ function importModeModal() {
         <div class="modalBody">
           <div class="card" style="box-shadow:none">
             <div style="font-weight:900">Choose import mode</div>
-            <div class="smallMeta" style="margin-top:8px">Merge keeps current data. Replace wipes current data.</div>
           </div>
           <div class="modalFooter">
             <button class="btn" type="button" data-cancel>Cancel</button>
@@ -367,13 +418,16 @@ function importModeModal() {
         </div>
       </div>
     `);
+
     host.appendChild(modal);
-    const close = (v) => {
+
+    const close = (result) => {
       host.classList.add("hidden");
       host.setAttribute("aria-hidden","true");
       host.innerHTML = "";
-      resolve(v);
+      resolve(result);
     };
+
     $("[data-close]", host).addEventListener("click", () => close(null));
     $("[data-cancel]", host).addEventListener("click", () => close(null));
     $("[data-merge]", host).addEventListener("click", () => close("merge"));
@@ -382,13 +436,12 @@ function importModeModal() {
   });
 }
 
-/* settings + appearance */
+/* ---------------- Appearance ---------------- */
 async function loadAppearance() {
-  applyAppearance({
-    theme: (await db.getSetting("theme")) || "Apple Light",
-    font: (await db.getSetting("font_family")) || "Inter",
-    size: (await db.getSetting("font_size")) || "13"
-  });
+  const theme = (await db.getSetting("theme")) || "Apple Light";
+  const font = (await db.getSetting("font_family")) || "Inter";
+  const size = (await db.getSetting("font_size")) || "13";
+  applyAppearance({ theme, font, size });
 }
 function applyAppearance({ theme, font, size }) {
   document.documentElement.dataset.theme = theme;
@@ -396,33 +449,36 @@ function applyAppearance({ theme, font, size }) {
   document.documentElement.style.setProperty("--font-size", `${parseInt(size, 10) || 13}px`);
 }
 
-/* service worker */
+/* ---------------- SW ---------------- */
 async function registerSW() {
   if (!("serviceWorker" in navigator)) return;
   try {
     const reg = await navigator.serviceWorker.register("./sw.js", { scope: "./" });
+
     reg.addEventListener("updatefound", () => {
       const worker = reg.installing;
       if (!worker) return;
       worker.addEventListener("statechange", () => {
         if (worker.state === "installed" && navigator.serviceWorker.controller) {
-          $("#updateBanner").classList.remove("hidden");
+          $("#updateBanner")?.classList.remove("hidden");
         }
       });
     });
-    $("#reloadBtn").addEventListener("click", () => location.reload());
+
+    $("#reloadBtn")?.addEventListener("click", () => location.reload());
   } catch {}
 }
 
-/* navigation */
+/* ---------------- Navigation ---------------- */
 function setPage(pageName) {
   $$(".navItem").forEach(b => b.classList.toggle("isActive", b.dataset.page === pageName));
   $$(".page").forEach(p => p.classList.remove("isVisible"));
-  $(`#page-${pageName}`).classList.add("isVisible");
+  $(`#page-${pageName}`)?.classList.add("isVisible");
   render(pageName);
 }
 $$(".navItem").forEach(b => b.addEventListener("click", () => setPage(b.dataset.page)));
 
+/* ---------------- Data Helpers ---------------- */
 async function subjectsMap() {
   const subs = await db.listSubjects();
   return new Map(subs.map(s => [s.id, s]));
@@ -431,36 +487,26 @@ async function topicsMap() {
   const topics = await db.listTopics();
   return new Map(topics.map(t => [t.id, t]));
 }
-function currentPageName() {
-  const page = $(".page.isVisible");
-  return page ? page.id.replace("page-", "") : "today";
-}
 
-/* archive helpers */
+/* ---------------- Archive Helpers ---------------- */
 async function updateTopicArchive(topicId) {
   const topic = await db.getTopic(topicId);
   if (!topic) return;
   const revs = await db.listRevisionsByTopic(topicId);
-  const finished = revs.length > 0 && revs.every(r => r.status === "done" || r.status === "skipped");
-  if (finished !== !!topic.archived) {
-    topic.archived = finished;
-    await db.updateTopic(topic);
-  }
+  const allFinished = revs.length > 0 && revs.every(r => r.status === "done" || r.status === "skipped");
+  topic.archived = allFinished;
+  await db.updateTopic(topic);
 }
 async function autoArchiveHomework(hw) {
-  if (hw.status === "completed" && !hw.archived) {
-    hw.archived = true;
-    await db.updateHomework(hw);
-  }
+  hw.archived = hw.status === "completed";
+  await db.updateHomework(hw);
 }
 async function autoArchiveExam(exam) {
-  if (exam.status === "completed" && !exam.archived) {
-    exam.archived = true;
-    await db.updateExam(exam);
-  }
+  exam.archived = (exam.status || "scheduled") === "completed";
+  await db.updateExam(exam);
 }
 
-/* smart carry-forward */
+/* ---------------- Carry Forward ---------------- */
 async function checkCarryForward() {
   const last = await db.getSetting("last_opened");
   const today = isoToday();
@@ -479,16 +525,16 @@ async function checkCarryForward() {
     body: `
       <div class="card" style="box-shadow:none">
         <div style="font-weight:950">${missed.length} pending revision(s)</div>
-        <div class="row" style="margin-top:10px; flex-wrap:wrap">
+        <div class="row" style="margin-top:10px;flex-wrap:wrap">
           <label class="row" style="font-weight:900"><input type="radio" name="mode" value="all" checked> Load all today</label>
-          <label class="row" style="font-weight:900"><input type="radio" name="mode" value="spread"> Spread with limit</label>
+          <label class="row" style="font-weight:900"><input type="radio" name="mode" value="spread"> Spread with cap</label>
         </div>
       </div>
     `,
     onSubmit: async (fd) => {
       const mode = fd.get("mode");
       const holidaySet = new Set((await db.listHolidays()).map(h => h.date));
-      const weeklyOffSet = new Set(((await db.getSetting("weekly_holidays")) || "").split(",").map(x => parseInt(x,10)).filter(Number.isFinite));
+      const weeklyOffSet = new Set(((await db.getSetting("weekly_holidays")) || "").split(",").map(x => parseInt(x, 10)).filter(Number.isFinite));
       const cap = Math.max(20, Math.min(30, parseInt((await db.getSetting("carry_forward_cap")) || "25", 10) || 25));
 
       if (mode === "all") {
@@ -503,8 +549,8 @@ async function checkCarryForward() {
           let d = today;
           while (true) {
             d = nextWorkDay(d, holidaySet, weeklyOffSet);
-            const current = (await db.listPendingRevisionsByDate(d)).length + (assigned.get(d) || 0);
-            if (current < cap) {
+            const existing = (await db.listPendingRevisionsByDate(d)).length + (assigned.get(d) || 0);
+            if (existing < cap) {
               assigned.set(d, (assigned.get(d) || 0) + 1);
               r.scheduledDate = d;
               await db.updateRevision(r);
@@ -514,13 +560,15 @@ async function checkCarryForward() {
           }
         }
       }
+
       toast("Updated.");
       await render("today");
+      return true;
     }
   });
 }
 
-/* calendar indicator mode */
+/* ---------------- Calendar Indicator ---------------- */
 async function calendarIndicatorHTML(r, h, e) {
   const mode = (await db.getSetting("calendar_indicator_mode")) || "both";
   const labels = [];
@@ -541,10 +589,10 @@ async function calendarIndicatorHTML(r, h, e) {
   return `${dots}<div class="calCounts">${labels.join(" ")}</div>`;
 }
 
-/* render dispatcher */
+/* ---------------- Dispatcher ---------------- */
 async function render(pageName) {
   closeOverlay();
-  switch (pageName) {
+  switch(pageName){
     case "today": return renderToday();
     case "calendar": return renderCalendar();
     case "upcoming": return renderUpcoming();
@@ -558,29 +606,30 @@ async function render(pageName) {
   }
 }
 
-/* today */
+/* ---------------- Today ---------------- */
 async function renderToday() {
   const host = $("#page-today");
   const today = isoToday();
   const subs = await subjectsMap();
+  const tMap = await topicsMap();
 
   const revsAll = await db.listRevisionsByDate(today);
-  const topicMap = await topicsMap();
-  const revs = revsAll.filter(r => !isArchived(topicMap.get(r.topicId)));
+  const revs = revsAll.filter(r => {
+    const tp = tMap.get(r.topicId);
+    return tp && !tp.archived;
+  });
   const pending = revs.filter(r => r.status === "pending");
 
-  const hwTodayAll = await db.listHomeworkByDate(today);
-  const hwToday = visibleOnly(hwTodayAll).filter(h => h.status === "pending");
-  const overdueHW = visibleOnly(await db.listHomework({ status: "pending" })).filter(h => h.dueDate < today);
+  const hwToday = visibleOnly(await db.listHomeworkByDate(today)).filter(h => h.status === "pending");
+  const overdueHW = visibleOnly(await db.listHomework({ status:"pending" })).filter(h => h.dueDate < today);
 
-  const exams = visibleOnly(await db.listExams({ status: "scheduled" })).sort((a,b) => a.examDate.localeCompare(b.examDate));
-  const upcomingExams = exams.filter(e => e.examDate >= today).slice(0, 4);
+  const exams = visibleOnly(await db.listExams({ status:"scheduled" })).filter(e => e.examDate >= today).slice(0, 4);
 
   host.innerHTML = `
     <h1 class="pageTitle">Today</h1>
     <div class="pageSub">${new Date().toLocaleDateString(undefined,{ weekday:"long", year:"numeric", month:"long", day:"numeric" })}</div>
 
-    <div class="row" style="gap:10px; margin-bottom: 12px; flex-wrap:wrap">
+    <div class="row" style="gap:10px; margin-bottom:12px; flex-wrap:wrap">
       <button class="btn btnPrimary" id="addTopicBtn">Add Topic</button>
       <button class="btn btnPrimary" id="addHwBtn">Add Homework</button>
       <button class="btn btnPrimary" id="addExamBtn">Add Exam</button>
@@ -589,24 +638,32 @@ async function renderToday() {
     <div class="grid2">
       <div class="card">
         <div class="cardHeader">
-          <div><div class="cardTitle">Revisions</div><div class="smallMeta">${pending.length} pending</div></div>
+          <div>
+            <div class="cardTitle">Revisions</div>
+            <div class="smallMeta">${pending.length} pending</div>
+          </div>
         </div>
-        <div class="list" id="todayRevs"></div>
+        <div class="list" id="todayRevList"></div>
       </div>
 
       <div class="card">
         <div class="cardHeader">
-          <div><div class="cardTitle">Exam Countdown</div></div>
+          <div>
+            <div class="cardTitle">Exam Countdown</div>
+          </div>
         </div>
-        <div class="list" id="todayExams"></div>
+        <div class="list" id="todayExamList"></div>
       </div>
     </div>
 
     <div class="card" style="margin-top:14px">
       <div class="cardHeader">
-        <div><div class="cardTitle">Homework</div><div class="smallMeta">${hwToday.length} due • ${overdueHW.length} overdue</div></div>
+        <div>
+          <div class="cardTitle">Homework</div>
+          <div class="smallMeta">${hwToday.length} due • ${overdueHW.length} overdue</div>
+        </div>
       </div>
-      <div class="list" id="todayHW"></div>
+      <div class="list" id="todayHwList"></div>
     </div>
   `;
 
@@ -614,12 +671,12 @@ async function renderToday() {
   $("#addHwBtn").addEventListener("click", () => openHomeworkModal());
   $("#addExamBtn").addEventListener("click", () => openExamModal());
 
-  const revList = $("#todayRevs");
+  const revList = $("#todayRevList");
   if (!revs.length) {
     revList.appendChild(el(`<div class="smallMeta">No revisions.</div>`));
   } else {
     for (const r of revs) {
-      const tp = topicMap.get(r.topicId);
+      const tp = tMap.get(r.topicId);
       const subj = subs.get(tp.subjectId);
       revList.appendChild(el(`
         <div class="item">
@@ -631,33 +688,30 @@ async function renderToday() {
             </div>
           </div>
           <div class="row">
-            ${r.status === "pending" ? `
-              <button class="btn btnPrimary" data-rdone="${r.id}">Done</button>
-              <button class="btn" data-rskip="${r.id}">Skip</button>
-            ` : `
-              <button class="btn" data-rundo="${r.id}">Undone</button>
-            `}
+            ${r.status === "pending"
+              ? `<button class="btn btnPrimary" data-rdone="${r.id}">Done</button><button class="btn" data-rskip="${r.id}">Skip</button>`
+              : `<button class="btn" data-rundo="${r.id}">Undone</button>`}
           </div>
         </div>
       `));
     }
   }
 
-  $$("[data-rdone]").forEach(b => b.addEventListener("click", async () => {
+  $$("[data-rdone]", revList).forEach(b => b.addEventListener("click", async () => {
     const rev = await db.getRevision(parseInt(b.dataset.rdone, 10));
     rev.status = "done";
     await db.updateRevision(rev);
     await updateTopicArchive(rev.topicId);
     await renderToday();
   }));
-  $$("[data-rskip]").forEach(b => b.addEventListener("click", async () => {
+  $$("[data-rskip]", revList).forEach(b => b.addEventListener("click", async () => {
     const rev = await db.getRevision(parseInt(b.dataset.rskip, 10));
     rev.status = "skipped";
     await db.updateRevision(rev);
     await updateTopicArchive(rev.topicId);
     await renderToday();
   }));
-  $$("[data-rundo]").forEach(b => b.addEventListener("click", async () => {
+  $$("[data-rundo]", revList).forEach(b => b.addEventListener("click", async () => {
     const rev = await db.getRevision(parseInt(b.dataset.rundo, 10));
     rev.status = "pending";
     await db.updateRevision(rev);
@@ -665,11 +719,11 @@ async function renderToday() {
     await renderToday();
   }));
 
-  const examList = $("#todayExams");
-  if (!upcomingExams.length) {
+  const examList = $("#todayExamList");
+  if (!exams.length) {
     examList.appendChild(el(`<div class="smallMeta">No upcoming exams.</div>`));
   } else {
-    for (const ex of upcomingExams) {
+    for (const ex of exams) {
       const subj = subs.get(ex.subjectId);
       const c = countdownText(ex.examDate);
       examList.appendChild(el(`
@@ -687,41 +741,46 @@ async function renderToday() {
     }
   }
 
-  const hwList = $("#todayHW");
-  if (!hwToday.length && !overdueHW.length) {
+  const hwList = $("#todayHwList");
+  const mergedHW = [...overdueHW, ...hwToday.filter(h => !overdueHW.some(x => x.id === h.id))];
+  if (!mergedHW.length) {
     hwList.appendChild(el(`<div class="smallMeta">No homework.</div>`));
   } else {
-    for (const h of [...overdueHW, ...hwToday]) {
-      const subj = subs.get(h.subjectId);
-      const overdue = h.dueDate < today;
+    for (const hw of mergedHW) {
+      const subj = subs.get(hw.subjectId);
+      const overdue = hw.dueDate < today && hw.status === "pending";
       hwList.appendChild(el(`
         <div class="item ${overdue ? "overdue" : ""}">
           <div class="itemLeft">
             <span class="badge" style="background:${subj?.color || "#999"}"></span>
             <div class="itemMain">
-              <div class="itemTitle">${escapeHtml(h.title)}</div>
-              <div class="itemMeta">${escapeHtml(subj?.name || "Subject")} • ${h.dueDate} • ${h.priority.toUpperCase()}</div>
+              <div class="itemTitle">${escapeHtml(hw.title)}</div>
+              <div class="itemMeta">${escapeHtml(subj?.name || "Subject")} • ${hw.dueDate} • ${hw.priority.toUpperCase()}</div>
             </div>
           </div>
           <div class="row">
-            <button class="btn btnPrimary" data-hdone="${h.id}">Done</button>
-            <button class="btn" data-hedit="${h.id}">Edit</button>
-            <button class="btn btnDanger" data-hdel="${h.id}">Delete</button>
+            <button class="btn btnPrimary" data-hdone="${hw.id}">Done</button>
+            <button class="btn" data-hedit="${hw.id}">Edit</button>
+            <button class="btn btnDanger" data-hdel="${hw.id}">Delete</button>
           </div>
         </div>
       `));
     }
   }
 
-  $$("[data-hdone]").forEach(b => b.addEventListener("click", async () => {
+  $$("[data-hdone]", hwList).forEach(b => b.addEventListener("click", async () => {
     const hw = await db.getHomework(parseInt(b.dataset.hdone, 10));
     hw.status = "completed";
     await autoArchiveHomework(hw);
     await renderToday();
   }));
-  $$("[data-hedit]").forEach(b => b.addEventListener("click", async () => openHomeworkModal(await db.getHomework(parseInt(b.dataset.hedit, 10)))));
-  $$("[data-hdel]").forEach(b => b.addEventListener("click", async () => {
-    if (!(await confirmModal({ title:"Delete homework", message:"Delete this homework?", confirmText:"Delete", danger:true }))) return;
+  $$("[data-hedit]", hwList).forEach(b => b.addEventListener("click", async () => {
+    const hw = await db.getHomework(parseInt(b.dataset.hedit, 10));
+    openHomeworkModal(hw);
+  }));
+  $$("[data-hdel]", hwList).forEach(b => b.addEventListener("click", async () => {
+    const ok = await confirmModal({ title:"Delete homework", message:"Delete this homework?", confirmText:"Delete", danger:true });
+    if (!ok) return;
     await db.deleteHomework(parseInt(b.dataset.hdel, 10));
     await renderToday();
   }));
@@ -729,7 +788,7 @@ async function renderToday() {
   await db.logDay(today, pending.length === 0);
 }
 
-/* calendar */
+/* ---------------- Calendar ---------------- */
 function monthInfo(year, month1to12) {
   const first = new Date(Date.UTC(year, month1to12 - 1, 1));
   const startDow = (first.getUTCDay() + 6) % 7;
@@ -743,14 +802,12 @@ let calSelected = isoToday();
 async function renderCalendar() {
   const host = $("#page-calendar");
   const { startDow, daysInMonth } = monthInfo(calYear, calMonth);
-  const monthPrefix = `${calYear}-${String(calMonth).padStart(2, "0")}`;
+  const monthPrefix = `${calYear}-${String(calMonth).padStart(2,"0")}`;
 
-  const topics = await db.listTopics();
-  const topicMap = new Map(topics.map(t => [t.id, t]));
-
+  const topicMap = await topicsMap();
   const revs = await db.revisionsInRange(`${monthPrefix}-01`, `${monthPrefix}-31`);
-  const hw = visibleOnly(await db.listHomework());
-  const ex = visibleOnly(await db.listExams());
+  const hws = visibleOnly(await db.listHomework());
+  const exs = visibleOnly(await db.listExams());
 
   const revCount = new Map();
   const hwCount = new Map();
@@ -761,14 +818,12 @@ async function renderCalendar() {
     if (!tp || tp.archived || r.status !== "pending") continue;
     revCount.set(r.scheduledDate, (revCount.get(r.scheduledDate) || 0) + 1);
   }
-  for (const h of hw) {
-    if (h.status !== "pending") continue;
-    if (!h.dueDate.startsWith(monthPrefix)) continue;
+  for (const h of hws) {
+    if (h.status !== "pending" || !h.dueDate.startsWith(monthPrefix)) continue;
     hwCount.set(h.dueDate, (hwCount.get(h.dueDate) || 0) + 1);
   }
-  for (const e of ex) {
-    if ((e.status || "scheduled") !== "scheduled") continue;
-    if (!(e.examDate || "").startsWith(monthPrefix)) continue;
+  for (const e of exs) {
+    if ((e.status || "scheduled") !== "scheduled" || !e.examDate.startsWith(monthPrefix)) continue;
     exCount.set(e.examDate, (exCount.get(e.examDate) || 0) + 1);
   }
 
@@ -776,29 +831,35 @@ async function renderCalendar() {
     <h1 class="pageTitle">Calendar</h1>
     <div class="card">
       <div class="rowBetween">
-        <div class="row">
+        <div class="row" style="gap:10px">
           <button class="btn" id="calPrev">Previous</button>
           <button class="btn" id="calNext">Next</button>
         </div>
         <div style="font-weight:950">${new Date(Date.UTC(calYear, calMonth - 1, 1)).toLocaleDateString(undefined, { month:"long", year:"numeric" })}</div>
         <button class="btn btnPrimary" id="calAddExam">Add Exam</button>
       </div>
+
       <hr class="sep">
       <div class="calendarGrid" style="margin-bottom:10px">${["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(d => `<div class="calDow">${d}</div>`).join("")}</div>
       <div class="calendarGrid" id="calGrid"></div>
     </div>
+
     <div class="card" style="margin-top:14px">
-      <div class="cardHeader"><div class="cardTitle">Selected: ${calSelected}</div></div>
+      <div class="cardHeader">
+        <div><div class="cardTitle">Selected: ${calSelected}</div></div>
+      </div>
       <div class="list" id="calDetails"></div>
     </div>
   `;
 
   $("#calPrev").addEventListener("click", () => {
-    calMonth -= 1; if (calMonth === 0) { calMonth = 12; calYear -= 1; }
+    calMonth -= 1;
+    if (calMonth === 0) { calMonth = 12; calYear -= 1; }
     renderCalendar();
   });
   $("#calNext").addEventListener("click", () => {
-    calMonth += 1; if (calMonth === 13) { calMonth = 1; calYear += 1; }
+    calMonth += 1;
+    if (calMonth === 13) { calMonth = 1; calYear += 1; }
     renderCalendar();
   });
   $("#calAddExam").addEventListener("click", () => openExamModal(null, calSelected));
@@ -811,27 +872,32 @@ async function renderCalendar() {
       continue;
     }
     const iso = `${monthPrefix}-${String(day).padStart(2,"0")}`;
-    const html = await calendarIndicatorHTML(revCount.get(iso) || 0, hwCount.get(iso) || 0, exCount.get(iso) || 0);
+    const indicators = await calendarIndicatorHTML(revCount.get(iso) || 0, hwCount.get(iso) || 0, exCount.get(iso) || 0);
     const cell = el(`
       <div class="calCell ${iso === calSelected ? "isSelected" : ""}" data-date="${iso}">
         <div class="calDay">${day}</div>
-        ${html}
+        ${indicators}
       </div>
     `);
-    cell.addEventListener("click", () => { calSelected = iso; renderCalendar(); });
+    cell.addEventListener("click", () => {
+      calSelected = iso;
+      renderCalendar();
+    });
     grid.appendChild(cell);
   }
 
   await renderCalendarDetails();
 }
+
 async function renderCalendarDetails() {
   const list = $("#calDetails");
   list.innerHTML = "";
+
   const subs = await subjectsMap();
-  const topicMap = await topicsMap();
+  const tMap = await topicsMap();
 
   const revs = (await db.listRevisionsByDate(calSelected)).filter(r => {
-    const tp = topicMap.get(r.topicId);
+    const tp = tMap.get(r.topicId);
     return tp && !tp.archived;
   });
   const hws = visibleOnly(await db.listHomeworkByDate(calSelected));
@@ -851,7 +917,7 @@ async function renderCalendarDetails() {
           <span class="badge" style="background:${subj?.color || "#999"}"></span>
           <div class="itemMain">
             <div class="itemTitle">${escapeHtml(ex.title)}</div>
-            <div class="itemMeta">${escapeHtml(subj?.name || "Subject")} • ${ex.examDate}${ex.examTime ? " • " + ex.examTime : ""} • ${(ex.priority || "medium").toUpperCase()}</div>
+            <div class="itemMeta">${escapeHtml(subj?.name || "Subject")} • ${ex.examDate}${ex.examTime ? " • " + ex.examTime : ""}</div>
           </div>
         </div>
         <div class="row">
@@ -861,10 +927,14 @@ async function renderCalendarDetails() {
       </div>
     `));
   }
-  $$("[data-exedit]", list).forEach(b => b.addEventListener("click", async () => openExamModal(await db.getExam(parseInt(b.dataset.exedit, 10)))));
+
+  $$("[data-exedit]", list).forEach(b => b.addEventListener("click", async () => {
+    const ex = await db.getExam(parseInt(b.dataset.exedit, 10));
+    openExamModal(ex);
+  }));
 
   for (const r of revs) {
-    const tp = topicMap.get(r.topicId);
+    const tp = tMap.get(r.topicId);
     const subj = subs.get(tp.subjectId);
     list.appendChild(el(`
       <div class="item">
@@ -878,6 +948,7 @@ async function renderCalendarDetails() {
       </div>
     `));
   }
+
   for (const h of hws) {
     const subj = subs.get(h.subjectId);
     list.appendChild(el(`
@@ -894,12 +965,12 @@ async function renderCalendarDetails() {
   }
 }
 
-/* upcoming */
+/* ---------------- Upcoming ---------------- */
 async function renderUpcoming() {
   const host = $("#page-upcoming");
-  const today = isoToday();
   const subs = await subjectsMap();
-  const topicMap = await topicsMap();
+  const tMap = await topicsMap();
+  const today = isoToday();
 
   host.innerHTML = `<h1 class="pageTitle">Upcoming</h1><div class="list" id="upList"></div>`;
   const list = $("#upList");
@@ -907,7 +978,7 @@ async function renderUpcoming() {
   for (let i = 0; i < 7; i++) {
     const d = addDays(today, i);
     const revs = (await db.listPendingRevisionsByDate(d)).filter(r => {
-      const tp = topicMap.get(r.topicId);
+      const tp = tMap.get(r.topicId);
       return tp && !tp.archived;
     });
     const hws = visibleOnly(await db.listHomeworkByDate(d)).filter(h => h.status === "pending");
@@ -941,8 +1012,9 @@ async function renderUpcoming() {
         </div>
       `));
     }
+
     for (const r of revs) {
-      const tp = topicMap.get(r.topicId);
+      const tp = tMap.get(r.topicId);
       const subj = subs.get(tp.subjectId);
       list.appendChild(el(`
         <div class="item">
@@ -956,6 +1028,7 @@ async function renderUpcoming() {
         </div>
       `));
     }
+
     for (const h of hws) {
       const subj = subs.get(h.subjectId);
       list.appendChild(el(`
@@ -973,7 +1046,7 @@ async function renderUpcoming() {
   }
 }
 
-/* topics */
+/* ---------------- Topics ---------------- */
 async function renderTopics() {
   const host = $("#page-topics");
   const subjects = await db.listSubjects();
@@ -1001,9 +1074,10 @@ async function renderTopics() {
   $("#tpSubj").addEventListener("change", renderTopicList);
 
   async function renderTopicList() {
-    const sid = $("#tpSubj").value ? parseInt($("#tpSubj").value, 10) : null;
     const search = $("#tpSearch").value.trim() || null;
-    const topics = visibleOnly(await db.listTopics({ subjectId: sid, search }));
+    const sid = $("#tpSubj").value ? parseInt($("#tpSubj").value, 10) : null;
+    const topics = visibleOnly(await db.listTopics({ subjectId:sid, search }));
+    const subs = await subjectsMap();
     const list = $("#tpList");
     list.innerHTML = "";
 
@@ -1012,18 +1086,18 @@ async function renderTopics() {
       return;
     }
 
-    const subs = await subjectsMap();
     for (const tp of topics) {
       const revs = await db.listRevisionsByTopic(tp.id);
       const done = revs.filter(r => r.status === "done").length;
-      const notesCount = (tp.notesText ? 1 : 0) + ((tp.notesChecklist || []).length ? 1 : 0);
+      const hasNotes = !!(tp.notesText || (tp.notesChecklist || []).length);
+
       list.appendChild(el(`
         <div class="item">
           <div class="itemLeft">
             <span class="badge" style="background:${subs.get(tp.subjectId)?.color || "#999"}"></span>
             <div class="itemMain">
               <div class="itemTitle">${escapeHtml(tp.name)}</div>
-              <div class="itemMeta">${escapeHtml(subs.get(tp.subjectId)?.name || "Subject")} • ${tp.dateAdded} • ${done}/${revs.length}${notesCount ? " • Notes" : ""}</div>
+              <div class="itemMeta">${escapeHtml(subs.get(tp.subjectId)?.name || "Subject")} • ${tp.dateAdded} • ${done}/${revs.length}${hasNotes ? " • Notes" : ""}</div>
             </div>
           </div>
           <div class="row">
@@ -1034,11 +1108,16 @@ async function renderTopics() {
       `));
     }
 
-    $$("[data-edit]", list).forEach(b => b.addEventListener("click", async () => openTopicModal(await db.getTopic(parseInt(b.dataset.edit, 10)))));
+    $$("[data-edit]", list).forEach(b => b.addEventListener("click", async () => {
+      const tp = await db.getTopic(parseInt(b.dataset.edit, 10));
+      openTopicModal(tp);
+    }));
+
     $$("[data-del]", list).forEach(b => b.addEventListener("click", async () => {
-      const topic = await db.getTopic(parseInt(b.dataset.del, 10));
-      if (!(await confirmModal({ title:"Delete topic", message:`Delete "${topic.name}"?`, confirmText:"Delete", danger:true }))) return;
-      await db.deleteTopic(topic.id);
+      const tp = await db.getTopic(parseInt(b.dataset.del, 10));
+      const ok = await confirmModal({ title:"Delete topic", message:`Delete "${tp.name}"?`, confirmText:"Delete", danger:true });
+      if (!ok) return;
+      await db.deleteTopic(tp.id);
       renderTopicList();
     }));
   }
@@ -1046,7 +1125,7 @@ async function renderTopics() {
   renderTopicList();
 }
 
-/* homework */
+/* ---------------- Homework ---------------- */
 async function renderHomework() {
   const host = $("#page-homework");
   const subjects = await db.listSubjects();
@@ -1082,7 +1161,7 @@ async function renderHomework() {
   async function renderList() {
     const sid = $("#hwSubj").value ? parseInt($("#hwSubj").value, 10) : null;
     const status = $("#hwStatus").value || null;
-    const items = visibleOnly(await db.listHomework({ subjectId: sid, status }));
+    const items = visibleOnly(await db.listHomework({ subjectId:sid, status }));
     const list = $("#hwList");
     list.innerHTML = "";
 
@@ -1121,9 +1200,15 @@ async function renderHomework() {
       }
       renderList();
     }));
-    $$("[data-edit]", list).forEach(b => b.addEventListener("click", async () => openHomeworkModal(await db.getHomework(parseInt(b.dataset.edit, 10)))));
+
+    $$("[data-edit]", list).forEach(b => b.addEventListener("click", async () => {
+      const hw = await db.getHomework(parseInt(b.dataset.edit, 10));
+      openHomeworkModal(hw);
+    }));
+
     $$("[data-del]", list).forEach(b => b.addEventListener("click", async () => {
-      if (!(await confirmModal({ title:"Delete homework", message:"Delete this homework?", confirmText:"Delete", danger:true }))) return;
+      const ok = await confirmModal({ title:"Delete homework", message:"Delete this homework?", confirmText:"Delete", danger:true });
+      if (!ok) return;
       await db.deleteHomework(parseInt(b.dataset.del, 10));
       renderList();
     }));
@@ -1132,7 +1217,7 @@ async function renderHomework() {
   renderList();
 }
 
-/* exams */
+/* ---------------- Exams ---------------- */
 async function renderExams() {
   const host = $("#page-exams");
   const subjects = await db.listSubjects();
@@ -1167,7 +1252,7 @@ async function renderExams() {
   async function renderList() {
     const sid = $("#exSubj").value ? parseInt($("#exSubj").value, 10) : null;
     const status = $("#exStatus").value || null;
-    const items = visibleOnly(await db.listExams({ subjectId: sid, status }));
+    const items = visibleOnly(await db.listExams({ subjectId:sid, status }));
     const list = $("#exList");
     list.innerHTML = "";
 
@@ -1177,10 +1262,10 @@ async function renderExams() {
     }
 
     for (const ex of items) {
-      const countdown = countdownText(ex.examDate);
+      const c = countdownText(ex.examDate);
       const linkedCount = (ex.linkedTopicIds || []).length;
       list.appendChild(el(`
-        <div class="item ${countdown.includes("ago") && (ex.status || "scheduled") === "scheduled" ? "overdue" : ""}">
+        <div class="item ${c.includes("ago") && (ex.status || "scheduled") === "scheduled" ? "overdue" : ""}">
           <div class="itemLeft">
             <span class="badge" style="background:${subs.get(ex.subjectId)?.color || "#999"}"></span>
             <div class="itemMain">
@@ -1195,7 +1280,7 @@ async function renderExams() {
             </div>
           </div>
           <div class="row">
-            <div class="countdownBadge ${countdown.includes("ago") ? "countdownDanger" : ""}">${escapeHtml(countdown)}</div>
+            <div class="countdownBadge ${c.includes("ago") ? "countdownDanger" : ""}">${escapeHtml(c)}</div>
             <button class="btn btnPrimary" data-toggle="${ex.id}">${(ex.status || "scheduled") === "scheduled" ? "Done" : "Scheduled"}</button>
             <button class="btn" data-edit="${ex.id}">Edit</button>
             <button class="btn btnDanger" data-del="${ex.id}">Delete</button>
@@ -1214,9 +1299,15 @@ async function renderExams() {
       }
       renderList();
     }));
-    $$("[data-edit]", list).forEach(b => b.addEventListener("click", async () => openExamModal(await db.getExam(parseInt(b.dataset.edit, 10)))));
+
+    $$("[data-edit]", list).forEach(b => b.addEventListener("click", async () => {
+      const ex = await db.getExam(parseInt(b.dataset.edit, 10));
+      openExamModal(ex);
+    }));
+
     $$("[data-del]", list).forEach(b => b.addEventListener("click", async () => {
-      if (!(await confirmModal({ title:"Delete exam", message:"Delete this exam?", confirmText:"Delete", danger:true }))) return;
+      const ok = await confirmModal({ title:"Delete exam", message:"Delete this exam?", confirmText:"Delete", danger:true });
+      if (!ok) return;
       await db.deleteExam(parseInt(b.dataset.del, 10));
       renderList();
     }));
@@ -1225,15 +1316,14 @@ async function renderExams() {
   renderList();
 }
 
-/* archive */
+/* ---------------- Archive ---------------- */
 async function renderArchive() {
   const host = $("#page-archive");
   const subs = await subjectsMap();
-  const topicMap = await topicsMap();
 
-  const topics = (await db.listTopics()).filter(isArchived);
-  const homework = (await db.listHomework()).filter(isArchived);
-  const exams = (await db.listExams()).filter(isArchived);
+  const topics = (await db.listTopics()).filter(t => t.archived);
+  const homework = (await db.listHomework()).filter(h => h.archived);
+  const exams = (await db.listExams()).filter(e => e.archived);
 
   host.innerHTML = `
     <h1 class="pageTitle">Archive</h1>
@@ -1243,6 +1333,7 @@ async function renderArchive() {
   `;
 
   const list = $("#archiveList");
+
   if (!topics.length && !homework.length && !exams.length) {
     list.appendChild(el(`<div class="smallMeta">Archive is empty.</div>`));
     return;
@@ -1322,7 +1413,7 @@ async function renderArchive() {
   }));
 }
 
-/* subjects */
+/* ---------------- Subjects ---------------- */
 async function renderSubjects() {
   const host = $("#page-subjects");
   const subjects = await db.listSubjects();
@@ -1363,29 +1454,38 @@ async function renderSubjects() {
     `));
   }
 
-  $$("[data-edit]", list).forEach(b => b.addEventListener("click", async () => openSubjectModal(await db.getSubject(parseInt(b.dataset.edit, 10)))));
+  $$("[data-edit]", list).forEach(b => b.addEventListener("click", async () => {
+    const s = await db.getSubject(parseInt(b.dataset.edit, 10));
+    openSubjectModal(s);
+  }));
+
   $$("[data-del]", list).forEach(b => b.addEventListener("click", async () => {
     const s = await db.getSubject(parseInt(b.dataset.del, 10));
-    if (!(await confirmModal({ title:"Delete subject", message:`Delete "${s.name}"?`, confirmText:"Delete", danger:true }))) return;
+    const ok = await confirmModal({ title:"Delete subject", message:`Delete "${s.name}"?`, confirmText:"Delete", danger:true });
+    if (!ok) return;
     await db.deleteSubject(s.id);
     renderSubjects();
   }));
 }
 
-/* dashboard */
+/* ---------------- Dashboard ---------------- */
 async function renderDashboard() {
   const host = $("#page-dashboard");
+
   host.innerHTML = `
     <h1 class="pageTitle">Dashboard</h1>
     <div class="segment" style="margin-bottom:12px">
       <button class="segBtn" id="segWeek" aria-pressed="true">Week</button>
       <button class="segBtn" id="segMonth" aria-pressed="false">Month</button>
     </div>
+
     <div class="grid4" id="dashCards"></div>
+
     <div class="card" style="margin-top:14px">
       <div class="cardHeader"><div class="cardTitle" id="chartTitle">Revisions</div></div>
       <div id="revChart"></div>
     </div>
+
     <div class="card" style="margin-top:14px">
       <div class="cardHeader"><div class="cardTitle">Subject Analytics</div></div>
       <div class="list" id="subjectAnalytics"></div>
@@ -1399,10 +1499,13 @@ async function renderDashboard() {
     $("#segMonth").setAttribute("aria-pressed", m === "month" ? "true" : "false");
     renderDashMode(mode);
   };
+
   $("#segWeek").addEventListener("click", () => setMode("week"));
   $("#segMonth").addEventListener("click", () => setMode("month"));
+
   await renderDashMode("week");
 }
+
 async function renderDashMode(mode) {
   const today = isoToday();
   const start = mode === "week"
@@ -1410,12 +1513,12 @@ async function renderDashMode(mode) {
     : `${today.slice(0,8)}01`;
 
   const topics = visibleOnly(await db.listTopics());
-  const topicsAdded = topics.filter(t => t.dateAdded >= start && t.dateAdded <= today).length;
+  const topicCount = topics.filter(t => t.dateAdded >= start && t.dateAdded <= today).length;
 
-  const rawRevs = await db.revisionsInRange(start, today);
-  const topicMap = await topicsMap();
-  const revs = rawRevs.filter(r => {
-    const tp = topicMap.get(r.topicId);
+  const tMap = await topicsMap();
+  const revsRaw = await db.revisionsInRange(start, today);
+  const revs = revsRaw.filter(r => {
+    const tp = tMap.get(r.topicId);
     return tp && !tp.archived;
   });
 
@@ -1427,20 +1530,27 @@ async function renderDashMode(mode) {
   let d = today;
   while (true) {
     const log = await db.getDailyLog(d);
-    if (log && log.allCompleted) { streak += 1; d = addDays(d, -1); }
-    else break;
+    if (log && log.allCompleted) {
+      streak += 1;
+      d = addDays(d, -1);
+    } else break;
   }
 
-  const upcomingExams = visibleOnly(await db.listExams({ status: "scheduled" })).filter(e => e.examDate >= today).length;
+  const exCount = visibleOnly(await db.listExams({ status:"scheduled" })).filter(e => e.examDate >= today).length;
 
   const cards = $("#dashCards");
   cards.innerHTML = "";
-  const card = (t, v) => el(`<div class="card" style="box-shadow:var(--shadow2)"><div class="smallMeta">${escapeHtml(t)}</div><div style="font-size:28px;font-weight:950">${escapeHtml(v)}</div></div>`);
-  cards.appendChild(card("Topics", topicsAdded));
+  const card = (title, value) => el(`
+    <div class="card" style="box-shadow:var(--shadow2)">
+      <div class="smallMeta">${escapeHtml(title)}</div>
+      <div style="font-size:28px;font-weight:950">${escapeHtml(value)}</div>
+    </div>
+  `);
+  cards.appendChild(card("Topics", topicCount));
   cards.appendChild(card("Revisions", `${done}/${total}`));
   cards.appendChild(card("Rate", `${rate}%`));
-  cards.appendChild(card("Upcoming Exams", upcomingExams));
-  cards.appendChild(card("Streak", `${streak}`));
+  cards.appendChild(card("Exams", exCount));
+  cards.appendChild(card("Streak", streak));
 
   $("#chartTitle").textContent = mode === "week" ? "Revisions This Week" : "Revisions This Month";
 
@@ -1461,12 +1571,16 @@ async function renderDashMode(mode) {
 
   const max = Math.max(1, ...days.map(d => counts.get(d) || 0));
   const chart = el(`<div class="row" style="align-items:flex-end;gap:10px;overflow:auto;padding-bottom:6px"></div>`);
+
   days.forEach(d => {
     const tot = counts.get(d) || 0;
     const dn = countsDone.get(d) || 0;
     const h = tot ? Math.round((tot / max) * 140) : 4;
     const h2 = dn ? Math.round((dn / max) * 140) : 0;
-    const label = mode === "week" ? new Date(d + "T00:00:00").toLocaleDateString(undefined, { weekday:"short" }) : String(parseInt(d.slice(8,10), 10));
+    const label = mode === "week"
+      ? new Date(d + "T00:00:00").toLocaleDateString(undefined, { weekday:"short" })
+      : String(parseInt(d.slice(8,10), 10));
+
     chart.appendChild(el(`
       <div style="min-width:34px;text-align:center">
         <div style="height:150px;display:flex;align-items:flex-end;justify-content:center">
@@ -1478,53 +1592,51 @@ async function renderDashMode(mode) {
       </div>
     `));
   });
+
   const revChart = $("#revChart");
   revChart.innerHTML = "";
   revChart.appendChild(chart);
 
-  const subjects = await db.listSubjects();
+  const subs = await db.listSubjects();
   const analytics = $("#subjectAnalytics");
   analytics.innerHTML = "";
-  const subjectStats = subjects.map(s => ({ id:s.id, name:s.name, color:s.color, total:0, done:0, topics:0 }));
 
-  topics.forEach(t => {
-    const row = subjectStats.find(x => x.id === t.subjectId);
+  const subjectStats = subs.map(s => ({ id:s.id, name:s.name, color:s.color, total:0, done:0, topics:0 }));
+  topics.forEach(tp => {
+    const row = subjectStats.find(x => x.id === tp.subjectId);
     if (row) row.topics += 1;
   });
   revs.forEach(r => {
-    const tp = topicMap.get(r.topicId);
+    const tp = tMap.get(r.topicId);
     const row = subjectStats.find(x => x.id === tp.subjectId);
     if (!row) return;
     row.total += 1;
     if (r.status === "done") row.done += 1;
   });
 
-  subjectStats.sort((a,b) => (b.total ? b.done / b.total : 0) - (a.total ? a.done / a.total : 0));
-
   if (!subjectStats.length) {
     analytics.appendChild(el(`<div class="smallMeta">No subject data.</div>`));
-    return;
-  }
-
-  subjectStats.forEach(s => {
-    const percent = s.total ? Math.round((s.done / s.total) * 100) : 0;
-    analytics.appendChild(el(`
-      <div>
-        <div class="rowBetween" style="margin-bottom:6px">
-          <div class="row">
-            <span class="badge" style="background:${s.color}"></span>
-            <div style="font-weight:900">${escapeHtml(s.name)}</div>
+  } else {
+    subjectStats.forEach(s => {
+      const percent = s.total ? Math.round((s.done / s.total) * 100) : 0;
+      analytics.appendChild(el(`
+        <div>
+          <div class="rowBetween" style="margin-bottom:6px">
+            <div class="row">
+              <span class="badge" style="background:${s.color}"></span>
+              <div style="font-weight:900">${escapeHtml(s.name)}</div>
+            </div>
+            <div class="smallMeta">${s.done}/${s.total} • ${percent}% • ${s.topics} topics</div>
           </div>
-          <div class="smallMeta">${s.done}/${s.total} • ${percent}% • ${s.topics} topics</div>
+          <div class="barTrack"><div class="barFill" style="width:${percent}%"></div></div>
         </div>
-        <div class="barTrack"><div class="barFill" style="width:${percent}%"></div></div>
-      </div>
-    `));
-  });
+      `));
+    });
+  }
 }
 
-/* settings */
-function debounce(fn, ms) {
+/* ---------------- Settings ---------------- */
+function debounce(fn, ms){
   let t;
   return (...args) => {
     clearTimeout(t);
@@ -1589,6 +1701,7 @@ async function renderSettings() {
 
     <div class="card" style="margin-top:14px">
       <div class="cardTitle">Holidays</div>
+
       <div class="sectionTitle">Weekly off days</div>
       <div class="row" style="flex-wrap:wrap;gap:14px">
         ${["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map((d,i) => `
@@ -1641,8 +1754,8 @@ async function renderSettings() {
     if (days.length) await db.setSetting("global_revision_days", days.join(","));
     await db.setSetting("calendar_indicator_mode", $("#setIndicators").value);
     const cap = Math.max(20, Math.min(30, parseInt($("#setCarryCap").value, 10) || 25));
-    await db.setSetting("carry_forward_cap", String(cap));
     $("#setCarryCap").value = String(cap);
+    await db.setSetting("carry_forward_cap", String(cap));
     toast("Saved.");
   }, 300);
 
@@ -1662,10 +1775,12 @@ async function renderSettings() {
     const hols = await db.listHolidays();
     const list = $("#holList");
     list.innerHTML = "";
+
     if (!hols.length) {
       list.appendChild(el(`<div class="smallMeta">No holidays.</div>`));
       return;
     }
+
     hols.forEach(h => {
       list.appendChild(el(`
         <div class="item">
@@ -1681,8 +1796,10 @@ async function renderSettings() {
         </div>
       `));
     });
+
     $$("[data-hdel]", list).forEach(b => b.addEventListener("click", async () => {
-      if (!(await confirmModal({ title:"Remove holiday", message:"Remove this holiday?", confirmText:"Remove", danger:true }))) return;
+      const ok = await confirmModal({ title:"Remove holiday", message:"Remove this holiday?", confirmText:"Remove", danger:true });
+      if (!ok) return;
       await db.deleteHoliday(parseInt(b.dataset.hdel, 10));
       renderHolidays();
     }));
@@ -1719,6 +1836,7 @@ async function renderSettings() {
       if (!mode) return;
       if (mode === "replace") await db.replaceAll(data);
       else await db.mergeAll(data);
+
       await db.ensureDefaults({
         theme: "Apple Light",
         font_family: "Inter",
@@ -1729,6 +1847,7 @@ async function renderSettings() {
         calendar_indicator_mode: "both",
         carry_forward_cap: "25"
       });
+
       await loadAppearance();
       toast("Imported.");
       setPage("today");
@@ -1740,7 +1859,7 @@ async function renderSettings() {
   });
 }
 
-/* modals */
+/* ---------------- Modals ---------------- */
 async function openSubjectModal(existing=null) {
   const isEdit = !!existing;
   const selected = existing?.color || SUBJECT_SWATCHES[0];
@@ -1770,9 +1889,14 @@ async function openSubjectModal(existing=null) {
     `,
     onSubmit: async (fd) => {
       const name = fd.get("name").trim();
-      if (!name) return false;
+      if (!name) {
+        toast("Enter subject name.", "error");
+        return false;
+      }
+
       const color = fd.get("color");
       const revisionDays = fd.get("useCustom") === "on" ? parseDaysCSV(fd.get("customDays")) : null;
+
       try {
         if (isEdit) {
           existing.name = name;
@@ -1782,12 +1906,14 @@ async function openSubjectModal(existing=null) {
         } else {
           await db.addSubject({ name, color, revisionDays: revisionDays?.length ? revisionDays : null });
         }
-        toast("Saved.");
-        renderSubjects();
       } catch {
-        toast("Name exists.", "error");
+        toast("Name already exists.", "error");
         return false;
       }
+
+      toast("Saved.");
+      await renderSubjects();
+      return true;
     }
   });
 }
@@ -1795,7 +1921,10 @@ async function openSubjectModal(existing=null) {
 async function openTopicModal(existing=null) {
   const isEdit = !!existing;
   const subjects = await db.listSubjects();
-  if (!subjects.length) return toast("Add subject first.", "error");
+  if (!subjects.length) {
+    toast("Add subject first.", "error");
+    return;
+  }
 
   showModal({
     title: isEdit ? "Edit Topic" : "Add Topic",
@@ -1823,7 +1952,11 @@ async function openTopicModal(existing=null) {
     onSubmit: async (fd) => {
       const subjectId = parseInt(fd.get("subjectId"), 10);
       const name = fd.get("name").trim();
-      if (!name) return false;
+
+      if (!name) {
+        toast("Enter topic name.", "error");
+        return false;
+      }
 
       if (isEdit) {
         existing.subjectId = subjectId;
@@ -1833,22 +1966,43 @@ async function openTopicModal(existing=null) {
         await db.updateTopic(existing);
       } else {
         const dateAdded = fd.get("dateAdded") || isoToday();
+
         const topicId = await db.addTopic({
-          subjectId, name, dateAdded,
+          subjectId,
+          name,
+          dateAdded,
           notesText: fd.get("notesText").trim(),
           notesChecklist: parseChecklistText(fd.get("notesChecklist")),
           archived: false
         });
 
         const subject = await db.getSubject(subjectId);
-        const intervals = subject?.revisionDays?.length ? subject.revisionDays : parseDaysCSV((await db.getSetting("global_revision_days")) || "3,7,14,28");
+        const intervals = subject?.revisionDays?.length
+          ? subject.revisionDays
+          : parseDaysCSV((await db.getSetting("global_revision_days")) || "3,7,14,28");
+
         const holidaySet = new Set((await db.listHolidays()).map(h => h.date));
-        const weeklyOffSet = new Set(((await db.getSetting("weekly_holidays")) || "").split(",").map(x => parseInt(x, 10)).filter(Number.isFinite));
-        const revs = scheduleRevisions({ topicId, dateAddedISO: dateAdded, dayIntervals: intervals, holidaySet, weeklyOffSet });
+        const weeklyOffSet = new Set(
+          ((await db.getSetting("weekly_holidays")) || "")
+            .split(",")
+            .map(x => parseInt(x, 10))
+            .filter(Number.isFinite)
+        );
+
+        const revs = scheduleRevisions({
+          topicId,
+          dateAddedISO: dateAdded,
+          dayIntervals: intervals,
+          holidaySet,
+          weeklyOffSet
+        });
+
         await db.addRevisions(revs);
       }
+
       toast("Saved.");
-      renderTopics();
+      await render(currentPageName());
+      return true;
     }
   });
 }
@@ -1856,7 +2010,10 @@ async function openTopicModal(existing=null) {
 async function openHomeworkModal(existing=null) {
   const isEdit = !!existing;
   const subjects = await db.listSubjects();
-  if (!subjects.length) return toast("Add subject first.", "error");
+  if (!subjects.length) {
+    toast("Add subject first.", "error");
+    return;
+  }
 
   showModal({
     title: isEdit ? "Edit Homework" : "Add Homework",
@@ -1902,11 +2059,21 @@ async function openHomeworkModal(existing=null) {
         archived: existing?.archived || false,
         dateAdded: existing?.dateAdded || isoToday()
       };
-      if (!row.title) return false;
-      if (isEdit) await db.updateHomework(row);
-      else await db.addHomework(row);
+
+      if (!row.title) {
+        toast("Enter homework title.", "error");
+        return false;
+      }
+
+      if (isEdit) {
+        await db.updateHomework(row);
+      } else {
+        await db.addHomework(row);
+      }
+
       toast("Saved.");
-      renderHomework();
+      await render(currentPageName());
+      return true;
     }
   });
 }
@@ -1915,14 +2082,19 @@ async function openExamModal(existing=null, defaultDate=null) {
   const isEdit = !!existing;
   const subjects = await db.listSubjects();
   const topics = visibleOnly(await db.listTopics());
-  const subjectsMapObj = new Map(subjects.map(s => [s.id, s]));
   const linked = new Set(existing?.linkedTopicIds || []);
 
-  if (!subjects.length) return toast("Add subject first.", "error");
+  if (!subjects.length) {
+    toast("Add subject first.", "error");
+    return;
+  }
+
+  const subjectNames = new Map(subjects.map(s => [s.id, s.name]));
 
   showModal({
     title: isEdit ? "Edit Exam" : "Add Exam",
     submitText: isEdit ? "Save" : "Add",
+    wide: true,
     body: `
       <label class="smallMeta">Subject</label>
       <select name="subjectId">
@@ -1972,12 +2144,15 @@ async function openExamModal(existing=null, defaultDate=null) {
 
       <label class="smallMeta">Linked topics</label>
       <div class="linkedTopicsBox">
-        ${topics.length ? topics.map(tp => `
-          <label class="row" style="gap:8px; margin-bottom:8px; font-weight:800">
-            <input type="checkbox" name="linkedTopicIds" value="${tp.id}" ${linked.has(tp.id) ? "checked" : ""}>
-            ${escapeHtml(tp.name)} <span class="smallMeta">(${escapeHtml(subjectsMapObj.get(tp.subjectId)?.name || "Subject")})</span>
-          </label>
-        `).join("") : `<div class="smallMeta">No topics.</div>`}
+        ${topics.length
+          ? topics.map(tp => `
+            <label class="row" style="gap:8px; margin-bottom:8px; font-weight:800">
+              <input type="checkbox" name="linkedTopicIds" value="${tp.id}" ${linked.has(tp.id) ? "checked" : ""}>
+              ${escapeHtml(tp.name)} <span class="smallMeta">(${escapeHtml(subjectNames.get(tp.subjectId) || "Subject")})</span>
+            </label>
+          `).join("")
+          : `<div class="smallMeta">No topics.</div>`
+        }
       </div>
 
       <label class="smallMeta">Notes</label>
@@ -2003,17 +2178,29 @@ async function openExamModal(existing=null, defaultDate=null) {
         archived: existing?.archived || false,
         dateAdded: existing?.dateAdded || isoToday()
       };
-      if (!row.title || !row.examDate) return false;
-      if (isEdit) await db.updateExam(row);
-      else await db.addExam(row);
-      if (row.status === "completed") await autoArchiveExam(row);
+
+      if (!row.title || !row.examDate) {
+        toast("Enter exam title and date.", "error");
+        return false;
+      }
+
+      if (row.status === "completed") row.archived = true;
+      else row.archived = false;
+
+      if (isEdit) {
+        await db.updateExam(row);
+      } else {
+        await db.addExam(row);
+      }
+
       toast("Saved.");
-      renderExams();
+      await render(currentPageName());
+      return true;
     }
   });
 }
 
-/* exports */
+/* ---------------- Export ---------------- */
 function downloadBlob(filename, blob) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -2022,32 +2209,42 @@ function downloadBlob(filename, blob) {
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
+
 async function exportJSON() {
   const data = await db.exportAll();
   downloadBlob("studyloop_backup.json", new Blob([JSON.stringify(data, null, 2)], { type:"application/json" }));
   toast("Exported.");
 }
+
 async function exportCSV() {
   const subs = await subjectsMap();
-  const topicMap = await topicsMap();
+  const tMap = await topicsMap();
   const revisions = await db.revisionsInRange("0000-01-01", "9999-12-31");
+
   const rows = [["Topic","Subject","Date Added","Revision #","Interval Day","Scheduled Date","Status"]];
   revisions.forEach(r => {
-    const tp = topicMap.get(r.topicId);
+    const tp = tMap.get(r.topicId);
     const s = tp ? subs.get(tp.subjectId) : null;
     rows.push([tp?.name || "", s?.name || "", tp?.dateAdded || "", r.revisionNum, r.dayInterval, r.scheduledDate, r.status]);
   });
+
   const csv = rows.map(r => r.map(x => `"${String(x).replaceAll('"','""')}"`).join(",")).join("\n");
   downloadBlob("studyloop_data.csv", new Blob([csv], { type:"text/csv" }));
   toast("Exported.");
 }
+
 async function exportXLSX() {
-  if (!window.XLSX) return toast("XLSX not loaded.", "error");
+  if (!window.XLSX) {
+    toast("XLSX not loaded.", "error");
+    return;
+  }
+
   const data = await db.exportAll();
   const subs = new Map(data.subjects.map(s => [s.id, s.name]));
   const topics = new Map(data.topics.map(t => [t.id, t]));
 
   const wb = XLSX.utils.book_new();
+
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data.revisions.map(r => ({
     Topic: topics.get(r.topicId)?.name || "",
     Subject: subs.get(topics.get(r.topicId)?.subjectId) || "",
@@ -2056,6 +2253,7 @@ async function exportXLSX() {
     Scheduled: r.scheduledDate,
     Status: r.status
   }))), "Revisions");
+
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data.homework.map(h => ({
     Title: h.title,
     Subject: subs.get(h.subjectId) || "",
@@ -2063,6 +2261,7 @@ async function exportXLSX() {
     Priority: h.priority,
     Status: h.status
   }))), "Homework");
+
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data.exams.map(e => ({
     Title: e.title,
     Subject: subs.get(e.subjectId) || "",
@@ -2071,13 +2270,19 @@ async function exportXLSX() {
     Priority: e.priority || "",
     Status: e.status || ""
   }))), "Exams");
+
   const out = XLSX.write(wb, { bookType:"xlsx", type:"array" });
   downloadBlob("studyloop_data.xlsx", new Blob([out], { type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
   toast("Exported.");
 }
+
 async function exportPDF() {
   const jspdf = window.jspdf;
-  if (!jspdf) return toast("PDF not loaded.", "error");
+  if (!jspdf) {
+    toast("PDF not loaded.", "error");
+    return;
+  }
+
   const { jsPDF } = jspdf;
   const doc = new jsPDF({ unit:"pt", format:"a4" });
   const data = await db.exportAll();
@@ -2085,6 +2290,7 @@ async function exportPDF() {
   doc.setFont("helvetica","bold");
   doc.setFontSize(18);
   doc.text("StudyLoop Report", 40, 55);
+
   doc.setFont("helvetica","normal");
   doc.setFontSize(11);
   doc.text(`Generated: ${new Date().toLocaleString()}`, 40, 75);
@@ -2102,13 +2308,15 @@ async function exportPDF() {
   line(`Revisions: ${data.revisions.length}`);
   line(`Homework: ${data.homework.length}`);
   line(`Exams: ${data.exams.length}`);
+
   doc.save("studyloop_report.pdf");
   toast("Exported.");
 }
 
-/* start */
+/* ---------------- Start ---------------- */
 async function start() {
   db = await StudyLoopDB.open();
+
   await db.ensureDefaults({
     theme: "Apple Light",
     font_family: "Inter",
@@ -2123,6 +2331,7 @@ async function start() {
   await loadAppearance();
   await registerSW();
   await checkCarryForward();
+
   setPage("today");
 }
 
