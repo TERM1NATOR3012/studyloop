@@ -240,14 +240,14 @@ function enhanceColorControls(root){
 }
 
 /* modal */
-function showModal({ title, body, onSubmit, submitText="Save" }) {
+function showModal({ title, body, onSubmit, submitText="Save", wide=false }) {
   const host = $("#modalHost");
   host.classList.remove("hidden");
   host.setAttribute("aria-hidden","false");
   host.innerHTML = "";
 
   const modal = el(`
-    <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal ${wide ? "wide" : ""}" role="dialog" aria-modal="true">
       <div class="modalHeader">
         <div class="modalTitle">${escapeHtml(title)}</div>
         <button class="btn btnGhost" data-close>Close</button>
@@ -256,7 +256,7 @@ function showModal({ title, body, onSubmit, submitText="Save" }) {
         ${body}
         <div class="modalFooter">
           <button type="button" class="btn" data-close>Cancel</button>
-          <button type="submit" class="btn btnPrimary">${escapeHtml(submitText)}</button>
+          <button type="submit" class="btn btnPrimary" data-submit>${escapeHtml(submitText)}</button>
         </div>
       </form>
     </div>
@@ -274,12 +274,36 @@ function showModal({ title, body, onSubmit, submitText="Save" }) {
   };
 
   $$("[data-close]", host).forEach(b => b.addEventListener("click", close));
-  host.addEventListener("click", (e) => { if (e.target === host) close(); }, { once:true });
+  host.addEventListener("click", (e) => {
+    if (e.target === host) close();
+  }, { once:true });
 
-  $("[data-form]", host).addEventListener("submit", async (e) => {
+  const form = $("[data-form]", host);
+  const submitBtn = $("[data-submit]", host);
+  let busy = false;
+
+  form.addEventListener("submit", async (e) => {
     e.preventDefault();
-    const ok = await onSubmit?.(new FormData(e.currentTarget));
-    if (ok !== false) close();
+    if (busy) return;
+
+    busy = true;
+    const oldText = submitBtn.textContent;
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Saving...";
+
+    try {
+      const ok = await onSubmit?.(new FormData(form));
+      if (ok !== false) close();
+    } catch (err) {
+      console.error(err);
+      toast(err?.message || "Something went wrong.", "error");
+      submitBtn.disabled = false;
+      submitBtn.textContent = oldText;
+      busy = false;
+      return;
+    }
+
+    busy = false;
   });
 }
 function confirmModal({ title="Confirm", message="Are you sure?", confirmText="OK", danger=false }) {
